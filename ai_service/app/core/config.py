@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings:
-    PORT: int = int(os.getenv('PORT', 5000))
+    PORT: int = int(os.getenv('PORT', 4000))
     HOST: str = os.getenv('HOST', '0.0.0.0')
     ENVIRONMENT: str = os.getenv('ENVIRONMENT', 'production')
     CORS_ORIGINS: list = os.getenv('CORS_ORIGINS', '*').split(',')

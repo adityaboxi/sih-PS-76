@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import { db } from '../db/store.js';
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:5000';
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:4000';
 
 export const createGrievance = async (req, res) => {
   try {

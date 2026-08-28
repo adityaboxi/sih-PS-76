@@ -1,3 +1,4 @@
+import { notificationService } from './notificationService';
 // JanSetu AI - Production Client Mock & Resilient State Engine
 // Includes AI Hallucination Guard, Zero-Discard Safety Gate & Automated Re-routing
 
@@ -430,6 +431,7 @@ class ClientAiEngine {
     }
 
     this.grievances.unshift(newGrievance);
+    notificationService.dispatchGrievanceCreated(newGrievance);
     this.save();
     return newGrievance;
   }
@@ -450,6 +452,7 @@ class ClientAiEngine {
     });
 
     this.save();
+    notificationService.dispatchStatusUpdated(item, newStatus, remarks);
     return item;
   }
 

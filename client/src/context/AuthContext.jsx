@@ -1,81 +1,184 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { PAN_INDIA_GEOGRAPHY } from '../locales/panIndiaGeo';
 
-export const USER_ROLES = {
-  CITIZEN: {
-    id: 'CITIZEN',
-    name: 'Aditi Roy (Citizen)',
-    title: 'Citizen Complainant',
+export const DEMO_ROLES = [
+  {
+    id: 'citizen',
+    name: 'Aditi Roy',
+    role: 'CITIZEN',
+    title: 'Citizen (नागरिक / নাগরিক)',
     phone: '9876543210',
+    email: 'aditi.roy@citizen.gov.in',
+    state: 'West Bengal',
     district: 'Kolkata',
     ward: 'Ward 8 (Jadavpur)',
-    badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    icon: 'User'
+    preferredLanguage: 'en',
+    allowedTabs: ['citizen_home', 'file', 'track']
   },
-  WATER_OFFICER: {
-    id: 'OFFICER',
+  {
+    id: 'officer_water',
+    name: 'Er. Rajesh Deshmukh',
+    role: 'NODAL_OFFICER',
     departmentId: 'WATER_SUPPLY',
-    name: 'Er. Soumen Banerjee',
-    title: 'Executive Engineer (Water Supply & Sanitation)',
-    phone: '9830011223',
-    district: 'Kolkata',
-    badgeColor: 'bg-blue-100 text-blue-800 border-blue-300',
-    icon: 'Building2'
+    departmentName: 'Water Supply & Jal Jeevan Mission',
+    title: 'Nodal Officer (Water Supply)',
+    phone: '9820011223',
+    email: 'rajesh.deshmukh@mh.gov.in',
+    state: 'Maharashtra',
+    district: 'Mumbai Suburban',
+    preferredLanguage: 'en',
+    allowedTabs: ['officer', 'track', 'gis']
   },
-  POWER_OFFICER: {
-    id: 'OFFICER',
+  {
+    id: 'officer_power',
+    name: 'K. N. Verma, EE',
+    role: 'NODAL_OFFICER',
     departmentId: 'ELECTRICITY_POWER',
-    name: 'K. N. Verma',
-    title: 'Divisional Inspector (Electricity & Power)',
-    phone: '9830055443',
-    district: 'Howrah',
-    badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
-    icon: 'Zap'
+    departmentName: 'State Electricity Distribution (DISCOM)',
+    title: 'Executive Engineer (Power Grid)',
+    phone: '9415022334',
+    email: 'kn.verma@uppcl.gov.in',
+    state: 'Uttar Pradesh',
+    district: 'Lucknow',
+    preferredLanguage: 'en',
+    allowedTabs: ['officer', 'track', 'gis']
   },
-  TRIAGE_OFFICER: {
-    id: 'TRIAGE',
+  {
+    id: 'triage_supervisor',
     name: 'P. Mukherjee',
+    role: 'TRIAGE_SUPERVISOR',
     title: 'Zero-Discard Triage Supervisor',
-    phone: '9830077889',
-    district: 'State Central Control Room',
-    badgeColor: 'bg-purple-100 text-purple-800 border-purple-300',
-    icon: 'ShieldCheck'
+    phone: '9830099887',
+    email: 'p.mukherjee@jansetu.gov.in',
+    state: 'National Portal',
+    district: 'Central Triage Cell',
+    preferredLanguage: 'en',
+    allowedTabs: ['review_queue', 'officer', 'gis', 'analytics']
   },
-  DISTRICT_MAGISTRATE: {
-    id: 'ADMIN',
-    name: 'Dr. Rajesh Kumar, IAS',
-    title: 'District Magistrate & Collector',
-    phone: '9830099001',
-    district: 'Kolkata District HQ',
-    badgeColor: 'bg-rose-100 text-rose-800 border-rose-300',
-    icon: 'Crown'
+  {
+    id: 'district_magistrate',
+    name: 'Dr. Anand Kumar, IAS',
+    role: 'ADMIN_COLLECTOR',
+    title: 'District Magistrate & Collector (IAS)',
+    phone: '9945033445',
+    email: 'collector.bengaluru@kar.nic.in',
+    state: 'Karnataka',
+    district: 'Bengaluru Urban',
+    preferredLanguage: 'en',
+    allowedTabs: ['analytics', 'gis', 'officer', 'review_queue', 'track']
   }
-};
+];
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem('jansetu_active_user');
-    return saved ? JSON.parse(saved) : USER_ROLES.CITIZEN;
+    try {
+      const saved = localStorage.getItem('jansetu_active_user_v2');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {}
+    return DEMO_ROLES[0]; // Default logged-in citizen
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!localStorage.getItem('jansetu_authenticated_v2') || true;
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem('jansetu_active_user', JSON.stringify(currentUser));
-  }, [currentUser]);
+  const loginUser = (userData) => {
+    setCurrentUser(userData);
+    setIsAuthenticated(true);
+    try {
+      localStorage.setItem('jansetu_active_user_v2', JSON.stringify(userData));
+      localStorage.setItem('jansetu_authenticated_v2', 'true');
+    } catch (e) {}
+  };
 
-  const switchRole = (roleKey) => {
-    if (USER_ROLES[roleKey]) {
-      setCurrentUser(USER_ROLES[roleKey]);
-    }
+  const registerCitizen = ({ name, phone, state, district, ward, preferredLanguage }) => {
+    const newUser = {
+      id: `citizen_${Date.now()}`,
+      name: name || 'Citizen User',
+      role: 'CITIZEN',
+      title: 'Citizen (नागरिक / নাগরিক)',
+      phone: phone || '9876543210',
+      email: `${phone}@citizen.nic.in`,
+      state: state || 'West Bengal',
+      district: district || 'Kolkata',
+      ward: ward || 'Ward 1',
+      preferredLanguage: preferredLanguage || 'en',
+      allowedTabs: ['citizen_home', 'file', 'track']
+    };
+    loginUser(newUser);
+    return newUser;
+  };
+
+  const registerOfficer = ({ name, email, departmentId, departmentName, state, district, role }) => {
+    const newUser = {
+      id: `officer_${Date.now()}`,
+      name: name || 'Government Officer',
+      role: role || 'NODAL_OFFICER',
+      departmentId: departmentId || 'WATER_SUPPLY',
+      departmentName: departmentName || 'Water Supply Department',
+      title: `Officer (${departmentName || 'Civic'})`,
+      phone: '9800000000',
+      email: email || 'officer@gov.in',
+      state: state || 'National Portal',
+      district: district || 'Central District',
+      preferredLanguage: 'en',
+      allowedTabs: role === 'ADMIN_COLLECTOR' ? ['analytics', 'gis', 'officer', 'review_queue', 'track'] : ['officer', 'track', 'gis']
+    };
+    loginUser(newUser);
+    return newUser;
+  };
+
+  const switchRole = (roleId) => {
+    const target = DEMO_ROLES.find(r => r.id === roleId) || DEMO_ROLES[0];
+    loginUser(target);
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    try {
+      localStorage.removeItem('jansetu_authenticated_v2');
+    } catch (e) {}
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, setCurrentUser, switchRole, USER_ROLES, isAuthModalOpen, setIsAuthModalOpen }}>
+    <AuthContext.Provider value={{
+      currentUser,
+      isAuthenticated,
+      loginUser,
+      registerCitizen,
+      registerOfficer,
+      switchRole,
+      logout,
+      isAuthModalOpen,
+      setIsAuthModalOpen,
+      DEMO_ROLES
+    }}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    return {
+      currentUser: DEMO_ROLES[0],
+      isAuthenticated: true,
+      loginUser: () => {},
+      registerCitizen: () => {},
+      registerOfficer: () => {},
+      switchRole: () => {},
+      logout: () => {},
+      isAuthModalOpen: false,
+      setIsAuthModalOpen: () => {},
+      DEMO_ROLES
+    };
+  }
+  return context;
+};

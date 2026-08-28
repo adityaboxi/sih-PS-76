@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
-import { Mic, MicOff, Camera, Send, Sparkles, HelpCircle, ArrowRight, User, Phone, Terminal, Loader2, CheckCircle2 } from 'lucide-react';
+import { Mic, MicOff, Camera, Send, Sparkles, HelpCircle, ArrowRight, User, Phone, Terminal, Loader2, CheckCircle2, MapPin, Building2 } from 'lucide-react';
 import { clientAi } from '../services/mockAiEngine';
 import { useAuth } from '../context/AuthContext';
+import { PAN_INDIA_GEOGRAPHY } from '../locales/panIndiaGeo';
 
 export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTracking, onGrievanceCreated }) {
   const { currentUser } = useAuth();
   const [description, setDescription] = useState('');
   const [citizenName, setCitizenName] = useState(currentUser.name.split(' ')[0] || 'Aditi Roy');
   const [phone, setPhone] = useState(currentUser.phone || '9876543210');
-  const [district, setDistrict] = useState(currentUser.district || 'Kolkata');
+  
+  // Pan-India State & District Selection
+  const [selectedState, setSelectedState] = useState(currentUser.state || 'West Bengal');
+  const availableDistricts = PAN_INDIA_GEOGRAPHY[selectedState]?.districts || ['Kolkata', 'Howrah'];
+  const [selectedDistrict, setSelectedDistrict] = useState(currentUser.district || availableDistricts[0]);
   const [ward, setWard] = useState(currentUser.ward || 'Ward 8 (Jadavpur)');
   const [attachment, setAttachment] = useState(null);
   
@@ -23,11 +28,11 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
       setIsRecording(true);
       setTimeout(() => {
         if (currentLang === 'bn') {
-          setDescription('আমাদের যাদবপুর ৮ নম্বর ওয়ার্ডে গত তিন দিন ধরে প্রধান পাইপ ফেটে পানীয় জল নষ্ট হচ্ছে এবং জল সরবরাহ বন্ধ। শিশুরা পানীয় জলের অভাবে অসুস্থ হয়ে পড়ছে।');
+          setDescription('আমাদের পাড়ায় গত তিন দিন ধরে প্রধান পাইপ ফেটে পানীয় জল নষ্ট হচ্ছে এবং জল সরবরাহ বন্ধ। শিশুরা পানীয় জলের অভাবে অসুস্থ হয়ে পড়ছে।');
         } else if (currentLang === 'hi') {
           setDescription('मेन रोड पर 11KV का बिजली का तार टूटकर नीचे गिर गया है और उसमें स्पार्क हो रहा है। बहुत बड़ा खतरा है!');
         } else {
-          setDescription('Main drinking water pipeline burst in Jadavpur Ward 8 near market for 3 days, water supply cutoff, children getting sick from water crisis.');
+          setDescription('Main drinking water pipeline burst in market area for 3 days, water supply cutoff, children getting sick from water crisis.');
         }
         setIsRecording(false);
       }, 2500);
@@ -40,20 +45,28 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
     if (presetKey === 'water') {
       setDescription(currentLang === 'bn' 
         ? 'আমাদের যাদবপুর ৮ নম্বর ওয়ার্ডে গত তিন দিন ধরে প্রধান পাইপ ফেটে পানীয় জল নষ্ট হচ্ছে এবং জল সরবরাহ বন্ধ। শিশুরা পানীয় জলের অভাবে অসুস্থ হয়ে পড়ছে।'
-        : 'Main water pipe burst in Ward 8 near Jadavpur market for 3 days, no water supply and children are getting sick.');
+        : 'Main drinking water pipeline burst in Jadavpur Ward 8 near market for 3 days, water supply cutoff, children getting sick from water crisis.');
+      setSelectedState('West Bengal');
+      setSelectedDistrict('Kolkata');
       setWard('Ward 8 (Jadavpur)');
     } else if (presetKey === 'electric') {
       setDescription(currentLang === 'hi'
         ? 'मेन रोड पर 11KV का बिजली का तार टूटकर नीचे गिर गया है और उसमें स्पार्क हो रहा है। बहुत बड़ा खतरा है!'
         : '11KV high voltage electric wire snapped and fallen on main road with active sparks, immediate danger to life.');
-      setWard('Ward 12 (Salt Lake)');
+      setSelectedState('Uttar Pradesh');
+      setSelectedDistrict('Lucknow');
+      setWard('Hazratganj Main Sector');
     } else if (presetKey === 'road') {
       setDescription(currentLang === 'bn'
         ? 'হাওড়া ব্রিজের কাছে মেন রোডে বড় গর্ত হয়ে গিয়েছে এবং বৃষ্টির জলে রাস্তা ভেঙে অনবরত বাইক উল্টে দুর্ঘটনা ঘটছে।'
         : 'Huge deep pothole and road cave-in on highway causing continuous vehicle accidents and traffic jam.');
-      setWard('Ward 4 (Howrah)');
+      setSelectedState('Maharashtra');
+      setSelectedDistrict('Mumbai City');
+      setWard('Andheri East Metro Line');
     } else if (presetKey === 'spam') {
       setDescription('asdfghjk 12345 testing system spam random input');
+      setSelectedState('West Bengal');
+      setSelectedDistrict('Kolkata');
       setWard('Ward 8 (Jadavpur)');
     }
   };
@@ -68,8 +81,8 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
     setResultGrievance(null);
 
     const steps = [
-      { delay: 300, log: '⚡ [1/4] Ingesting citizen payload & detecting language dialect...' },
-      { delay: 700, log: '🧠 [2/4] Querying LangChain Gemini & Citizen Charter Vector DB...' },
+      { delay: 300, log: `⚡ [1/4] Ingesting Pan-India payload for ${selectedState} (${selectedDistrict})...` },
+      { delay: 700, log: '🧠 [2/4] Querying LangChain Gemini & National Citizen Charter Vector DB...' },
       { delay: 1100, log: '🛡️ [3/4] Evaluating Zero-Discard Confidence Gate & Spatial Duplicates...' },
       { delay: 1500, log: '📝 [4/4] Generating Explainable AI (XAI) transparent policy audit trail...' }
     ];
@@ -85,7 +98,7 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
         text: description,
         citizen_name: citizenName,
         phone: phone,
-        district: district,
+        district: `${selectedDistrict}, ${selectedState}`,
         ward: ward,
         pincode: '700032',
         preferred_language: currentLang,
@@ -104,7 +117,7 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
       <div className="text-center mb-8">
         <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold mb-3 shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-          <span>{t.zero_discard_badge}</span>
+          <span>Pan-India Zero-Discard Redressal Platform</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 mb-2">
           {t.form_title}
@@ -117,7 +130,7 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
       {/* Main Glass Form Card */}
       <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl shadow-slate-200/50 border border-slate-200/80">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Big Voice Recording Button for Village Citizens */}
+          {/* Big Voice Recording Button for Rural/Village Citizens */}
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center space-x-3.5">
               <button
@@ -174,7 +187,7 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
                 className="text-left p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 transition cursor-pointer"
               >
                 <div className="text-xs font-bold text-blue-900">💧 {t.preset_water_title}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5 truncate">{t.preset_water_desc}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5 truncate">WB / Jal Jeevan Mission</div>
               </button>
 
               <button
@@ -183,7 +196,7 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
                 className="text-left p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-amber-50/60 hover:border-amber-300 transition cursor-pointer"
               >
                 <div className="text-xs font-bold text-amber-900">⚡ {t.preset_electric_title}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5 truncate">{t.preset_electric_desc}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5 truncate">UP / 11KV Power Grid Conductor</div>
               </button>
 
               <button
@@ -192,7 +205,7 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
                 className="text-left p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition cursor-pointer"
               >
                 <div className="text-xs font-bold text-slate-900">🚧 {t.preset_road_title}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5 truncate">{t.preset_road_desc}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5 truncate">MH / Mumbai PWD Flyover</div>
               </button>
 
               <button
@@ -201,12 +214,12 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
                 className="text-left p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-purple-50/60 hover:border-purple-300 transition cursor-pointer"
               >
                 <div className="text-xs font-bold text-purple-900">🛡️ {t.preset_spam_title}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5 truncate">{t.preset_spam_desc}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5 truncate">Zero-Discard Triage Guard</div>
               </button>
             </div>
           </div>
 
-          {/* Citizen Details */}
+          {/* Pan-India Geographic Location & Citizen Details */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.name_label}</label>
@@ -234,32 +247,48 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
               </div>
             </div>
 
+            {/* Pan-India State Selector */}
             <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.district_label}</label>
+              <label className="block text-xs font-bold text-slate-600 mb-1.5">Indian State / UT:</label>
               <select
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
+                value={selectedState}
+                onChange={(e) => {
+                  const state = e.target.value;
+                  setSelectedState(state);
+                  const dists = PAN_INDIA_GEOGRAPHY[state]?.districts || [];
+                  if (dists.length > 0) setSelectedDistrict(dists[0]);
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium bg-white focus:outline-none focus:border-blue-600"
               >
-                <option value="Kolkata">Kolkata (কলকাতা)</option>
-                <option value="Howrah">Howrah (হাওড়া)</option>
-                <option value="North 24 Parganas">North 24 Parganas</option>
-                <option value="South 24 Parganas">South 24 Parganas</option>
+                {Object.keys(PAN_INDIA_GEOGRAPHY).map((st) => (
+                  <option key={st} value={st}>{st}</option>
+                ))}
               </select>
             </div>
 
+            {/* District Selector */}
             <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.ward_label}</label>
+              <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.district_label}</label>
               <select
-                value={ward}
-                onChange={(e) => setWard(e.target.value)}
+                value={selectedDistrict}
+                onChange={(e) => setSelectedDistrict(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium bg-white focus:outline-none focus:border-blue-600"
               >
-                <option value="Ward 8 (Jadavpur)">Ward 8 (Jadavpur / যাদবপুর)</option>
-                <option value="Ward 12 (Salt Lake)">Ward 12 (Salt Lake)</option>
-                <option value="Ward 4 (Howrah)">Ward 4 (Howrah)</option>
-                <option value="Ward 108 (Bypass)">Ward 108 (EM Bypass)</option>
+                {availableDistricts.map((dst) => (
+                  <option key={dst} value={dst}>{dst}</option>
+                ))}
               </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-600 mb-1.5">Locality / Municipal Ward / Sector:</label>
+              <input
+                type="text"
+                value={ward}
+                onChange={(e) => setWard(e.target.value)}
+                placeholder="e.g. Ward 8 (Jadavpur), Sector 18, Hazratganj, etc."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:border-blue-600"
+              />
             </div>
           </div>
 
@@ -290,7 +319,7 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
             {isStreamingTriage ? (
               <span className="flex items-center space-x-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>AI Multilingual Triage Stream in Progress...</span>
+                <span>AI Pan-India Triage Stream in Progress...</span>
               </span>
             ) : (
               <>
@@ -302,12 +331,12 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
         </form>
       </div>
 
-      {/* Live AI Streaming Terminal Output */}
+      {/* Live AI Streaming Terminal */}
       {isStreamingTriage && (
         <div className="mt-6 bg-slate-950 text-slate-200 rounded-3xl p-6 shadow-xl border border-slate-800 font-mono text-xs space-y-2">
           <div className="flex items-center space-x-2 text-blue-400 font-bold border-b border-slate-800 pb-2 mb-2">
             <Terminal className="w-4 h-4" />
-            <span>JanSetu AI Real-Time Inference Stream:</span>
+            <span>JanSetu National Triage Stream:</span>
           </div>
           {streamLogs.map((log, idx) => (
             <div key={idx} className="animate-fade-in flex items-center space-x-2">
@@ -318,7 +347,7 @@ export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTrackin
         </div>
       )}
 
-      {/* Result Card (Clean Dark Slate & Blue) */}
+      {/* Result Card */}
       {resultGrievance && (
         <div className="mt-8 bg-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-800">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

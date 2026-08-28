@@ -9,70 +9,104 @@ import AnalyticsView from './components/AnalyticsView';
 import XAIDrawer from './components/XAIDrawer';
 import ChatAssistant from './components/ChatAssistant';
 import AuthModal from './components/AuthModal';
-import { DICTIONARY } from './locales/translations';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import CitizenDashboard from './components/CitizenDashboard';
+import LoginPage from './components/LoginPage';
+import NotificationDrawer from './components/NotificationDrawer';
+import { DICTIONARY as TRANSLATIONS } from './locales/translations';
+import { useAuth } from './context/AuthContext';
 import { getSocket } from './services/socketClient';
 
-function MainApp() {
-  const [currentLang, setCurrentLang] = useState(() => import.meta.env.VITE_DEFAULT_LANGUAGE || 'bn');
-  const [activeTab, setActiveTab] = useState('file');
-  const [selectedXAI, setSelectedXAI] = useState(null);
-  const [isXAIModalOpen, setIsXAIModalOpen] = useState(false);
-  const [trackingTicket, setTrackingTicket] = useState(null);
-  const { isAuthModalOpen, setIsAuthModalOpen } = useAuth();
+export default function App() {
+  const { currentUser, isAuthenticated } = useAuth();
+  const [currentLang, setCurrentLang] = useState(import.meta.env.VITE_DEFAULT_LANGUAGE || 'en');
+  const [activeTab, setActiveTab] = useState(currentUser.role === 'CITIZEN' ? 'citizen_home' : 'officer');
+  
+  const [selectedXAIItem, setSelectedXAIItem] = useState(null);
+  const [trackTicketParam, setTrackTicketParam] = useState('');
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
-  const t = DICTIONARY[currentLang] || DICTIONARY.en;
+  const t = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
 
-  // Initialize WebSockets for real-time live events
+  // When role changes, switch to default allowed tab for that role
   useEffect(() => {
-    const socket = getSocket();
-    socket.on('grievance:created', (data) => {
-      console.log('⚡ [Real-Time WebSocket] New Grievance Created:', data.ticket_number);
-    });
-    socket.on('grievance:updated', (data) => {
-      console.log('⚡ [Real-Time WebSocket] Grievance Status Updated:', data.ticket_number, data.status);
-    });
-    return () => {
-      socket.off('grievance:created');
-      socket.off('grievance:updated');
-    };
+    if (currentUser && currentUser.allowedTabs && !currentUser.allowedTabs.includes(activeTab)) {
+      setActiveTab(currentUser.allowedTabs[0] || 'citizen_home');
+    }
+  }, [currentUser]);
+
+  // Connect Socket for live updates
+  useEffect(() => {
+    try {
+      const socket = getSocket();
+      socket.on('grievance:created', (data) => {
+        console.log('⚡ Socket event grievance:created:', data);
+      });
+      return () => {
+        socket.off('grievance:created');
+      };
+    } catch (e) {}
   }, []);
 
-  const handleOpenXAI = (grievance) => {
-    setSelectedXAI(grievance);
-    setIsXAIModalOpen(true);
+  const handleOpenXAI = (item) => {
+    setSelectedXAIItem(item);
   };
 
   const handleViewTracking = (ticketNumber) => {
-    setTrackingTicket(ticketNumber);
+    setTrackTicketParam(ticketNumber);
     setActiveTab('track');
   };
 
+  // If not logged in, render the clean Login / Registration portal
+  if (!isAuthenticated) {
+    return (
+      <LoginPage
+        currentLang={currentLang}
+        onLanguageChange={setCurrentLang}
+        t={t}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+      {/* Top Navigation */}
       <Navbar
         currentLang={currentLang}
         onLanguageChange={setCurrentLang}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        onOpenNotifications={() => setIsNotificationOpen(true)}
         t={t}
       />
 
-      <main className="flex-1">
+      {/* Main Content Area */}
+      <main className="flex-1 pb-16">
+        {activeTab === 'citizen_home' && (
+          <CitizenDashboard
+            onTabChange={setActiveTab}
+            onViewTracking={handleViewTracking}
+            onOpenXAI={handleOpenXAI}
+            t={t}
+          />
+        )}
+
         {activeTab === 'file' && (
           <GrievanceForm
             currentLang={currentLang}
             t={t}
             onOpenXAI={handleOpenXAI}
             onViewTracking={handleViewTracking}
-            onGrievanceCreated={() => {}}
+            onGrievanceCreated={(item) => {
+              setTrackTicketParam(item.ticket_number);
+            }}
           />
         )}
 
         {activeTab === 'track' && (
           <GrievanceTracker
+            currentLang={currentLang}
             t={t}
-            initialTicket={trackingTicket}
+            initialTicketParam={trackTicketParam}
             onOpenXAI={handleOpenXAI}
           />
         )}
@@ -87,6 +121,7 @@ function MainApp() {
 
         {activeTab === 'review_queue' && (
           <TriageReviewQueue
+            t={t}
             onOpenXAI={handleOpenXAI}
             onViewTracking={handleViewTracking}
           />
@@ -106,46 +141,33 @@ function MainApp() {
         )}
       </main>
 
-      {/* Floating Multilingual Conversational RAG Assistant */}
+      {/* Notification Center Drawer (Email & SMS Delivery Logs) */}
+      <NotificationDrawer
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        onViewTracking={handleViewTracking}
+      />
+
+      {/* Explainable AI (XAI) Modal Drawer */}
+      <XAIDrawer
+        isOpen={!!selectedXAIItem}
+        onClose={() => setSelectedXAIItem(null)}
+        item={selectedXAIItem}
+        currentLang={currentLang}
+        t={t}
+      />
+
+      {/* Floating Pan-India Multilingual RAG Chatbot ("Nagrik Sahayak") */}
       <ChatAssistant
         currentLang={currentLang}
         t={t}
         onViewTracking={handleViewTracking}
       />
 
-      {/* Explainable AI Transparent Reasoning Inspector */}
-      <XAIDrawer
-        grievance={selectedXAI}
-        isOpen={isXAIModalOpen}
-        onClose={() => setIsXAIModalOpen(false)}
+      {/* Role Switcher & Phone OTP Modal */}
+      <AuthModal
         t={t}
       />
-
-      {/* Role & Authority Switcher Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
-
-      {/* Footer */}
-      <footer className="bg-slate-950 text-slate-400 py-6 border-t border-slate-800 text-xs text-center">
-        <div className="max-w-7xl mx-auto px-4 space-y-1">
-          <p className="font-bold text-slate-300">
-            JanSetu AI — AI-Based Citizen Grievance Prioritization and Routing System
-          </p>
-          <p className="text-slate-500">
-            Smart India Hackathon 2026 | Problem Statement 76 | Developed for High-Scale Multilingual Public Governance
-          </p>
-        </div>
-      </footer>
     </div>
-  );
-}
-
-export default function App() {
-  return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
   );
 }

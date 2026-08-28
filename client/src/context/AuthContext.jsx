@@ -72,18 +72,19 @@ export const DEMO_ROLES = [
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  // STRICT AUTHENTICATION: Must Sign Up or Log In first
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const saved = localStorage.getItem('jansetu_active_user_v2');
+      const saved = localStorage.getItem('jansetu_auth_session_v3');
       if (saved) {
         return JSON.parse(saved);
       }
     } catch (e) {}
-    return DEMO_ROLES[0]; // Default logged-in citizen
+    return null; // Start logged out
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem('jansetu_authenticated_v2') || true;
+    return !!localStorage.getItem('jansetu_auth_session_v3');
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -92,22 +93,22 @@ export function AuthProvider({ children }) {
     setCurrentUser(userData);
     setIsAuthenticated(true);
     try {
-      localStorage.setItem('jansetu_active_user_v2', JSON.stringify(userData));
-      localStorage.setItem('jansetu_authenticated_v2', 'true');
+      localStorage.setItem('jansetu_auth_session_v3', JSON.stringify(userData));
     } catch (e) {}
   };
 
   const registerCitizen = ({ name, phone, state, district, ward, preferredLanguage }) => {
+    const p = phone || '9876543210';
     const newUser = {
-      id: `citizen_${Date.now()}`,
+      id: 'citizen_' + p,
       name: name || 'Citizen User',
       role: 'CITIZEN',
       title: 'Citizen (नागरिक / নাগরিক)',
-      phone: phone || '9876543210',
-      email: `${phone}@citizen.nic.in`,
+      phone: p,
+      email: p + '@citizen.nic.in',
       state: state || 'West Bengal',
       district: district || 'Kolkata',
-      ward: ward || 'Ward 1',
+      ward: ward || 'Ward 8 (Jadavpur)',
       preferredLanguage: preferredLanguage || 'en',
       allowedTabs: ['citizen_home', 'file', 'track']
     };
@@ -116,15 +117,16 @@ export function AuthProvider({ children }) {
   };
 
   const registerOfficer = ({ name, email, departmentId, departmentName, state, district, role }) => {
+    const em = email || 'officer@gov.in';
     const newUser = {
-      id: `officer_${Date.now()}`,
+      id: 'officer_' + Date.now(),
       name: name || 'Government Officer',
       role: role || 'NODAL_OFFICER',
       departmentId: departmentId || 'WATER_SUPPLY',
       departmentName: departmentName || 'Water Supply Department',
-      title: `Officer (${departmentName || 'Civic'})`,
+      title: 'Officer (' + (departmentName || 'Civic') + ')',
       phone: '9800000000',
-      email: email || 'officer@gov.in',
+      email: em,
       state: state || 'National Portal',
       district: district || 'Central District',
       preferredLanguage: 'en',
@@ -140,9 +142,10 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    setCurrentUser(null);
     setIsAuthenticated(false);
     try {
-      localStorage.removeItem('jansetu_authenticated_v2');
+      localStorage.removeItem('jansetu_auth_session_v3');
     } catch (e) {}
   };
 
@@ -168,8 +171,8 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
     return {
-      currentUser: DEMO_ROLES[0],
-      isAuthenticated: true,
+      currentUser: null,
+      isAuthenticated: false,
       loginUser: () => {},
       registerCitizen: () => {},
       registerOfficer: () => {},

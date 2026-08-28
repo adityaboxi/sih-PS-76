@@ -19,13 +19,13 @@ import { getSocket } from './services/socketClient';
 export default function App() {
   const { currentUser, isAuthenticated } = useAuth();
   const [currentLang, setCurrentLang] = useState(import.meta.env.VITE_DEFAULT_LANGUAGE || 'en');
-  const [activeTab, setActiveTab] = useState(currentUser.role === 'CITIZEN' ? 'citizen_home' : 'officer');
+  const [activeTab, setActiveTab] = useState(currentUser?.role === 'CITIZEN' ? 'citizen_home' : 'officer');
   
   const [selectedXAIItem, setSelectedXAIItem] = useState(null);
   const [trackTicketParam, setTrackTicketParam] = useState('');
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
-  const t = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
+  const t = (TRANSLATIONS && TRANSLATIONS[currentLang]) ? TRANSLATIONS[currentLang] : (TRANSLATIONS?.en || {});
 
   // When role changes, switch to default allowed tab for that role
   useEffect(() => {

@@ -12,7 +12,7 @@ import AuthModal from './components/AuthModal';
 import CitizenDashboard from './components/CitizenDashboard';
 import LoginPage from './components/LoginPage';
 import NotificationDrawer from './components/NotificationDrawer';
-import { DICTIONARY as TRANSLATIONS } from './locales/translations';
+import { DICTIONARY as TRANSLATIONS, getTranslation } from './locales/translations';
 import { useAuth } from './context/AuthContext';
 import { getSocket } from './services/socketClient';
 
@@ -25,7 +25,7 @@ export default function App() {
   const [trackTicketParam, setTrackTicketParam] = useState('');
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
-  const t = (TRANSLATIONS && TRANSLATIONS[currentLang]) ? TRANSLATIONS[currentLang] : (TRANSLATIONS?.en || {});
+  const t = getTranslation(currentLang);
 
   // When role changes, switch to default allowed tab for that role
   useEffect(() => {

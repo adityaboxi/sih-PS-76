@@ -1,22 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import GrievanceForm from './components/GrievanceForm';
 import GrievanceTracker from './components/GrievanceTracker';
 import OfficerDashboard from './components/OfficerDashboard';
+import TriageReviewQueue from './components/TriageReviewQueue';
 import GISHeatmap from './components/GISHeatmap';
 import AnalyticsView from './components/AnalyticsView';
 import XAIDrawer from './components/XAIDrawer';
 import ChatAssistant from './components/ChatAssistant';
+import AuthModal from './components/AuthModal';
 import { DICTIONARY } from './locales/translations';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { getSocket } from './services/socketClient';
 
-export default function App() {
-  const [currentLang, setCurrentLang] = useState('bn'); // Default Bengali as requested
+function MainApp() {
+  const [currentLang, setCurrentLang] = useState(() => import.meta.env.VITE_DEFAULT_LANGUAGE || 'bn');
   const [activeTab, setActiveTab] = useState('file');
   const [selectedXAI, setSelectedXAI] = useState(null);
   const [isXAIModalOpen, setIsXAIModalOpen] = useState(false);
   const [trackingTicket, setTrackingTicket] = useState(null);
+  const { isAuthModalOpen, setIsAuthModalOpen } = useAuth();
 
   const t = DICTIONARY[currentLang] || DICTIONARY.en;
+
+  // Initialize WebSockets for real-time live events
+  useEffect(() => {
+    const socket = getSocket();
+    socket.on('grievance:created', (data) => {
+      console.log('⚡ [Real-Time WebSocket] New Grievance Created:', data.ticket_number);
+    });
+    socket.on('grievance:updated', (data) => {
+      console.log('⚡ [Real-Time WebSocket] Grievance Status Updated:', data.ticket_number, data.status);
+    });
+    return () => {
+      socket.off('grievance:created');
+      socket.off('grievance:updated');
+    };
+  }, []);
 
   const handleOpenXAI = (grievance) => {
     setSelectedXAI(grievance);
@@ -65,6 +85,13 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'review_queue' && (
+          <TriageReviewQueue
+            onOpenXAI={handleOpenXAI}
+            onViewTracking={handleViewTracking}
+          />
+        )}
+
         {activeTab === 'gis' && (
           <GISHeatmap
             onOpenXAI={handleOpenXAI}
@@ -79,7 +106,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Multilingual RAG Citizen Chatbot */}
+      {/* Floating Multilingual Conversational RAG Assistant */}
       <ChatAssistant
         currentLang={currentLang}
         t={t}
@@ -94,6 +121,12 @@ export default function App() {
         t={t}
       />
 
+      {/* Role & Authority Switcher Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
+
       {/* Footer */}
       <footer className="bg-slate-950 text-slate-400 py-6 border-t border-slate-800 text-xs text-center">
         <div className="max-w-7xl mx-auto px-4 space-y-1">
@@ -106,5 +139,13 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }

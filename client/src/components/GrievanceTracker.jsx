@@ -1,285 +1,246 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Clock, CheckCircle2, AlertCircle, Building2, User, Layers, HelpCircle, Printer, Download, MapPin, Shield } from 'lucide-react';
+import { Search, CheckCircle, Clock, MapPin, Printer, HelpCircle, AlertCircle, ArrowRight, User, Shield, Layers, FileCheck } from 'lucide-react';
 import { clientAi } from '../services/mockAiEngine';
-import axios from 'axios';
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
-export default function GrievanceTracker({ t, onOpenXAI, initialTicket }) {
-  const [ticketInput, setTicketInput] = useState(initialTicket || 'GR-2026-WB-1001');
+export default function GrievanceTracker({ t, initialTicket, onOpenXAI }) {
+  const [searchTicket, setSearchTicket] = useState(initialTicket || 'GR-2026-WB-1001');
   const [grievance, setGrievance] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [notFound, setNotFound] = useState(false);
-  const [showReceiptModal, setShowReceiptModal] = useState(false);
-
-  const fetchTicket = async (query) => {
-    if (!query) return;
-    setLoading(true);
-    setNotFound(false);
-
-    try {
-      const res = await axios.get(`${API_BASE}/grievances/${query}`);
-      if (res.data.success) {
-        setGrievance(res.data.data);
-        setLoading(false);
-        return;
-      }
-    } catch (e) {
-      // Use local fallback
-    }
-
-    const localItem = clientAi.getGrievanceById(query);
-    if (localItem) {
-      setGrievance(localItem);
-    } else {
-      setNotFound(true);
-    }
-    setLoading(false);
-  };
+  const [showReceipt, setShowReceipt] = useState(false);
 
   useEffect(() => {
     if (initialTicket) {
-      setTicketInput(initialTicket);
-      fetchTicket(initialTicket);
+      setSearchTicket(initialTicket);
+      handleSearch(initialTicket);
     } else {
-      fetchTicket('GR-2026-WB-1001');
+      handleSearch('GR-2026-WB-1001');
     }
   }, [initialTicket]);
 
-  const handleSearch = (e) => {
-    e?.preventDefault();
-    fetchTicket(ticketInput.trim());
+  const handleSearch = (idToSearch) => {
+    const term = (idToSearch || searchTicket).trim();
+    if (!term) return;
+    const found = clientAi.getGrievanceById(term);
+    setGrievance(found || null);
   };
+
+  const getStageIndex = (status) => {
+    switch (status) {
+      case 'SUBMITTED': return 1;
+      case 'AI_TRIAGED': return 2;
+      case 'ROUTED': return 3;
+      case 'IN_PROGRESS': return 4;
+      case 'RESOLVED': return 5;
+      default: return 1;
+    }
+  };
+
+  const currentStage = grievance ? getStageIndex(grievance.status) : 1;
+
+  const stages = [
+    { num: 1, title: t.stage_submitted, desc: 'Logged into secure state repository' },
+    { num: 2, title: t.stage_triaged, desc: 'AI prioritized and SLA assigned' },
+    { num: 3, title: t.stage_routed, desc: 'Sent to Executive Engineer' },
+    { num: 4, title: t.stage_dispatched, desc: 'Field technician team mobilized' },
+    { num: 5, title: t.stage_resolved, desc: 'Inspection & repair verified' },
+  ];
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Search Bar Card */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 mb-8">
-        <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1">{t.track_title}</h2>
-        <p className="text-xs sm:text-sm text-slate-500 mb-6">
-          Real-time status tracking, automated SLA timer, and officer assignment.
+      {/* Clean Header */}
+      <div className="text-center mb-8">
+        <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 mb-2">
+          {t.tracker_title}
+        </h1>
+        <p className="text-slate-500 text-sm sm:text-base max-w-xl mx-auto font-medium">
+          {t.tracker_subtitle}
         </p>
+      </div>
 
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
+      {/* Search Input Bar */}
+      <div className="bg-white rounded-3xl p-4 shadow-xl shadow-slate-200/50 border border-slate-100 mb-8">
+        <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              value={ticketInput}
-              onChange={(e) => setTicketInput(e.target.value)}
-              placeholder="e.g. GR-2026-WB-1001"
-              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-300 text-slate-900 text-sm font-mono focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+              value={searchTicket}
+              onChange={(e) => setSearchTicket(e.target.value)}
+              placeholder={t.search_placeholder}
+              className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-emerald-500 transition"
             />
           </div>
           <button
             type="submit"
-            disabled={loading}
-            className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-3 rounded-2xl text-sm transition shadow-md flex items-center justify-center space-x-2"
+            className="px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm font-bold transition shadow-md shadow-emerald-600/20 cursor-pointer"
           >
-            {loading ? <span>Searching...</span> : <span>{t.track_btn}</span>}
+            {t.track_button}
           </button>
         </form>
-
-        {/* Demo Ticket Quick Chips */}
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <span>Quick Demo Tickets:</span>
-          <button
-            type="button"
-            onClick={() => { setTicketInput('GR-2026-WB-1001'); fetchTicket('GR-2026-WB-1001'); }}
-            className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 font-bold"
-          >
-            GR-2026-WB-1001 (Bengali Water Critical)
-          </button>
-          <button
-            type="button"
-            onClick={() => { setTicketInput('GR-2026-WB-1002'); fetchTicket('GR-2026-WB-1002'); }}
-            className="font-mono text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 font-bold"
-          >
-            GR-2026-WB-1002 (Hindi Wire Critical)
-          </button>
-        </div>
       </div>
 
-      {notFound && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700 text-sm">
-          No grievance found with tracking ID: <strong>{ticketInput}</strong>. Please check your tracking number.
-        </div>
-      )}
+      {/* Grievance Details Card */}
+      {grievance ? (
+        <div className="space-y-6">
+          {/* Top Status & SLA Banner */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-100 relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-6">
+              <div>
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Official Grievance Code
+                </div>
+                <div className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-slate-900">
+                  {grievance.ticket_number}
+                </div>
+                <div className="text-xs text-slate-500 mt-1 font-medium">
+                  {grievance.department_name} • {grievance.ward || grievance.district}
+                </div>
+              </div>
 
-      {grievance && (
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 animate-fade-in space-y-6">
-          {/* Header Ticket Badge */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-5">
-            <div>
-              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Tracking Code</span>
-              <h3 className="text-2xl font-mono font-extrabold text-slate-900">{grievance.ticket_number}</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className={`px-3 py-1.5 rounded-xl border text-xs font-black uppercase ${
+                  grievance.priority_level === 'CRITICAL' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                  grievance.priority_level === 'HIGH' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                  'bg-blue-50 text-blue-700 border-blue-200'
+                }`}>
+                  {grievance.priority_level} ({grievance.priority_score}/100)
+                </div>
+
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center space-x-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>SLA: {grievance.sla_hours} {t.hours_unit}</span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center space-x-2.5">
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${
-                grievance.priority_level === 'CRITICAL' ? 'bg-red-100 text-red-700 border border-red-300' :
-                grievance.priority_level === 'HIGH' ? 'bg-amber-100 text-amber-700 border border-amber-300' :
-                'bg-emerald-100 text-emerald-700 border border-emerald-300'
-              }`}>
-                {grievance.priority_level} (Priority: {grievance.priority_score}/100)
+            {/* Duplicate Notice Banner if Linked */}
+            {grievance.is_duplicate && (
+              <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-center space-x-3 text-amber-900 text-xs font-medium">
+                <Layers className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                <div>
+                  {t.duplicate_notice.replace('{count}', '4')} <strong>(Master Ticket: {grievance.master_ticket_id || 'GR-2026-WB-1001'})</strong>.
+                </div>
+              </div>
+            )}
+
+            {/* 5-Stage Visual Stepper */}
+            <div className="py-4">
+              <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider block mb-4">
+                Lifecycle Resolution Progress
               </span>
 
-              <span className="bg-slate-900 text-white text-xs font-bold px-3 py-1 rounded-full">
-                {grievance.status}
-              </span>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                {stages.map((st) => {
+                  const isDone = st.num <= currentStage;
+                  const isCurrent = st.num === currentStage;
+                  return (
+                    <div
+                      key={st.num}
+                      className={`p-3.5 rounded-2xl border transition ${
+                        isCurrent
+                          ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                          : isDone
+                          ? 'bg-slate-50 border-slate-200'
+                          : 'bg-white border-slate-100 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2 mb-1.5">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          isDone ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {isDone ? '✓' : st.num}
+                        </div>
+                        <div className="text-xs font-bold text-slate-900">{st.title}</div>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-tight">{st.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between border-t border-slate-100 pt-6 mt-6">
+              <button
+                onClick={() => onOpenXAI(grievance)}
+                className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition"
+              >
+                <HelpCircle className="w-4 h-4 text-emerald-600" />
+                <span>{t.inspect_xai_btn}</span>
+              </button>
+
+              <button
+                onClick={() => setShowReceipt(true)}
+                className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-md"
+              >
+                <Printer className="w-4 h-4" />
+                <span>{t.print_receipt_btn}</span>
+              </button>
             </div>
           </div>
 
-          {/* 5-Step Visual Progress Stepper */}
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-4">
-              AI Grievance Resolution Lifecycle
-            </span>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
-              <div className="p-2.5 bg-emerald-600 text-white rounded-xl font-bold shadow-sm">
-                1. Submitted ✅
-              </div>
-              <div className="p-2.5 bg-emerald-600 text-white rounded-xl font-bold shadow-sm">
-                2. AI Triaged ✅
-              </div>
-              <div className="p-2.5 bg-emerald-600 text-white rounded-xl font-bold shadow-sm">
-                3. Routed to Dept ✅
-              </div>
-              <div className={`p-2.5 rounded-xl font-bold ${
-                grievance.status === 'RESOLVED' ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-slate-950 animate-pulse'
-              }`}>
-                4. Field Team Dispatched ⚡
-              </div>
-              <div className={`p-2.5 rounded-xl font-bold ${
-                grievance.status === 'RESOLVED' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'
-              }`}>
-                5. Resolved {grievance.status === 'RESOLVED' ? '✅' : '⏳'}
-              </div>
-            </div>
-          </div>
-
-          {/* Grievance Text Card */}
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-slate-400 font-bold uppercase">
-                Citizen Grievance ({grievance.input_language_name})
-              </span>
-              <span className="text-xs text-slate-500 font-mono">Location: {grievance.ward || grievance.district}</span>
-            </div>
-            <p className="text-sm text-slate-800 leading-relaxed font-medium">
-              "{grievance.original_text}"
-            </p>
-          </div>
-
-          {/* Department & Officer Details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/60">
-              <div className="flex items-center space-x-2 text-emerald-800 font-bold text-xs uppercase mb-1">
-                <Building2 className="w-4 h-4 text-emerald-600" />
-                <span>Assigned Department</span>
-              </div>
-              <div className="text-sm font-bold text-slate-900">{grievance.department_name}</div>
-              <div className="text-xs text-slate-500 mt-1">Resolution SLA: <strong>{grievance.sla_hours} Hours Target</strong></div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-sky-50/60 border border-sky-200/60">
-              <div className="flex items-center space-x-2 text-sky-800 font-bold text-xs uppercase mb-1">
-                <User className="w-4 h-4 text-sky-600" />
-                <span>Dispatched Nodal Officer</span>
-              </div>
-              <div className="text-sm font-bold text-slate-900">{grievance.assigned_officer}</div>
-              <div className="text-xs text-slate-500 mt-1">Contact: {grievance.phone}</div>
-            </div>
-          </div>
-
-          {/* Timeline */}
-          <div>
-            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center space-x-2">
-              <Clock className="w-4 h-4 text-emerald-600" />
-              <span>Audit Timeline Trail</span>
-            </h4>
-
-            <div className="relative border-l-2 border-emerald-500 ml-3.5 space-y-5 pb-2">
-              {(grievance.timeline || []).map((t, idx) => (
-                <div key={idx} className="relative pl-6">
-                  <div className="absolute -left-[9px] top-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white shadow-sm"></div>
-                  <div className="text-[11px] text-slate-400 font-mono">
-                    {new Date(t.timestamp).toLocaleString()}
+          {/* Timeline Trail */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-100">
+            <h3 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-4">
+              {t.timeline_title}
+            </h3>
+            <div className="space-y-4">
+              {grievance.timeline.map((evt, idx) => (
+                <div key={idx} className="flex items-start space-x-3 text-xs">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0"></div>
+                  <div>
+                    <div className="font-bold text-slate-900">{evt.title}</div>
+                    <div className="text-slate-500 mt-0.5">{evt.desc}</div>
+                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      {new Date(evt.timestamp).toLocaleString()}
+                    </div>
                   </div>
-                  <div className="text-sm font-bold text-slate-900 mt-0.5">{t.title}</div>
-                  <div className="text-xs text-slate-600 mt-0.5">{t.desc}</div>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Action Buttons */}
-          <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-            <button
-              onClick={() => setShowReceiptModal(true)}
-              className="inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold px-4 py-2.5 rounded-xl transition"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print Acknowledgement Receipt</span>
-            </button>
-
-            <button
-              onClick={() => onOpenXAI(grievance)}
-              className="inline-flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-sm"
-            >
-              <HelpCircle className="w-4 h-4 text-emerald-400" />
-              <span>{t.xai_title}</span>
-            </button>
-          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl p-8 text-center border border-slate-100 shadow-md">
+          <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+          <h3 className="text-sm font-bold text-slate-800">No Grievance Found</h3>
+          <p className="text-xs text-slate-500 mt-1">Please verify your tracking code.</p>
         </div>
       )}
 
       {/* Official Receipt Modal */}
-      {showReceiptModal && grievance && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative">
+      {showReceipt && grievance && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl border border-slate-200">
             <div className="text-center border-b border-slate-200 pb-4 mb-4">
-              <Shield className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-              <h3 className="font-extrabold text-base text-slate-900 uppercase">Government of West Bengal / India</h3>
-              <p className="text-xs text-slate-500 font-semibold">Official Citizen Grievance Acknowledgement Slip</p>
+              <h2 className="text-lg font-black text-slate-900">Government of West Bengal / India</h2>
+              <p className="text-xs text-slate-500 font-medium">Public Grievance Redressal Acknowledgement Receipt</p>
             </div>
 
-            <div className="space-y-2.5 text-xs text-slate-700">
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Tracking Code:</span>
+            <div className="space-y-2 text-xs text-slate-700 py-2">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Tracking Code:</span>
                 <span className="font-mono font-bold text-slate-900">{grievance.ticket_number}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Citizen Name:</span>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Citizen Name:</span>
                 <span className="font-bold">{grievance.citizen_name}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Department:</span>
-                <span className="font-bold text-emerald-700">{grievance.department_name}</span>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Department:</span>
+                <span className="font-bold">{grievance.department_name}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">AI Priority Level:</span>
-                <span className="font-bold text-red-600">{grievance.priority_level} (SLA: {grievance.sla_hours} Hours)</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Submission Date:</span>
-                <span>{new Date(grievance.created_at).toLocaleString()}</span>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Assigned SLA:</span>
+                <span className="font-bold">{grievance.sla_hours} Hours</span>
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                onClick={() => window.print()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
-              >
-                Print / Save PDF
-              </button>
-              <button
-                onClick={() => setShowReceiptModal(false)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl transition"
-              >
-                Close
-              </button>
-            </div>
+            <button
+              onClick={() => setShowReceipt(false)}
+              className="mt-6 w-full py-3 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800"
+            >
+              Close Receipt
+            </button>
           </div>
         </div>
       )}

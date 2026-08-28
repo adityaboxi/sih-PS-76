@@ -1,10 +1,10 @@
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-import os
 import logging
 
 from app.core.config import settings
@@ -12,25 +12,22 @@ from app.schemas import (
     GrievanceAnalysisRequest, GrievanceAnalysisResponse,
     DuplicateCheckRequest, ChatRequest, ChatResponse, XAIReasoning
 )
-from app.pipelines.language_engine import LanguageEngine
-from app.pipelines.classifier import DepartmentClassifier
+from app.pipelines.gemini_engine import GeminiGrievanceEngine
 from app.pipelines.duplicate_engine import DuplicateEngine
-from app.pipelines.spam_filter import SpamGuard
-from app.pipelines.xai_engine import XAIEngine
 from app.pipelines.rag_assistant import MultilingualRAGAssistant
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger('jansetu-ai')
 
 app = FastAPI(
-    title='JanSetu AI - Grievance Prioritization & Routing Engine',
-    description='Production Multilingual AI Microservice for SIH PS 76',
-    version='1.0.0',
+    title='JanSetu AI - LangChain & Gemini Grievance Prioritization Engine',
+    description='Production Multilingual AI Microservice using LangChain & Google Gemini for SIH PS 76',
+    version='2.0.0',
     docs_url='/docs',
     redoc_url='/redoc'
 )
 
-# CORS configuration from .env
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=['*'] if '*' in settings.CORS_ORIGINS else settings.CORS_ORIGINS,
@@ -39,7 +36,8 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
-classifier = DepartmentClassifier()
+# Initialize Engines
+gemini_engine = GeminiGrievanceEngine()
 rag_assistant = MultilingualRAGAssistant()
 
 @app.get('/health')
@@ -47,46 +45,39 @@ def health_check():
     return {
         'status': 'healthy',
         'service': 'JanSetu AI Microservice (SIH PS 76)',
+        'gemini_llm_enabled': bool(settings.GEMINI_API_KEY),
+        'model_name': settings.MODEL_NAME,
         'environment': settings.ENVIRONMENT,
         'default_language': settings.DEFAULT_LANGUAGE,
-        'version': '1.0.0'
+        'version': '2.0.0'
     }
 
 @app.post('/api/v1/analyze-grievance', response_model=GrievanceAnalysisResponse)
 def analyze_grievance(req: GrievanceAnalysisRequest):
     try:
-        detected_lang, lang_name = LanguageEngine.detect_language(req.text)
-        user_lang = req.user_preferred_language or detected_lang
-        normalized_en = LanguageEngine.normalize_to_english_concepts(req.text, detected_lang)
-
-        spam_result = SpamGuard.evaluate(req.text)
-        triage_result = classifier.classify_and_score(req.text, normalized_en, user_lang)
-
-        xai_data = XAIEngine.generate_reasoning(
-            department_name=triage_result['department_name'],
-            priority_level=triage_result['priority_level'],
-            priority_score=triage_result['priority_score'],
-            triggers=triage_result['detected_triggers'],
-            detected_lang=user_lang,
-            sla_hours=triage_result['sla_hours']
+        analysis = gemini_engine.analyze(
+            text=req.text,
+            user_lang=req.user_preferred_language or 'auto',
+            district=req.district or 'Kolkata',
+            ward=req.ward or 'Ward 8'
         )
 
         return GrievanceAnalysisResponse(
-            detected_language=detected_lang,
-            detected_language_name=lang_name,
-            normalized_english_text=normalized_en,
-            department_id=triage_result['department_id'],
-            department_name=triage_result['department_name'],
-            sub_category=triage_result['sub_category'],
-            priority_level=triage_result['priority_level'],
-            priority_score=triage_result['priority_score'],
-            sla_hours=triage_result['sla_hours'],
+            detected_language=analysis['detected_language'],
+            detected_language_name=analysis['detected_language_name'],
+            normalized_english_text=analysis['normalized_english_text'],
+            department_id=analysis['department_id'],
+            department_name=analysis['department_name'],
+            sub_category=analysis['sub_category'],
+            priority_level=analysis['priority_level'],
+            priority_score=analysis['priority_score'],
+            sla_hours=analysis['sla_hours'],
             is_duplicate=False,
             master_ticket_id=None,
             duplicate_similarity_score=0.0,
-            spam_score=spam_result['spam_score'],
-            verification_status=spam_result['verification_status'],
-            reasoning=XAIReasoning(**xai_data)
+            spam_score=analysis['spam_score'],
+            verification_status=analysis['verification_status'],
+            reasoning=XAIReasoning(**analysis['reasoning'])
         )
     except Exception as e:
         logger.error(f'Error analyzing grievance: {str(e)}')
@@ -114,10 +105,7 @@ def detect_duplicate(req: DuplicateCheckRequest):
 @app.post('/api/v1/chat', response_model=ChatResponse)
 def conversational_chat(req: ChatRequest):
     try:
-        lang = req.language_code
-        if not lang or lang == 'auto':
-            lang, _ = LanguageEngine.detect_language(req.message)
-
+        lang = req.language_code or 'bn'
         res = rag_assistant.answer_query(req.message, lang)
         return ChatResponse(
             reply=res['reply'],
@@ -130,4 +118,4 @@ def conversational_chat(req: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == '__main__':
-    uvicorn.run(app, host=settings.HOST, port=settings.PORT)
+    uvicorn.run('app.main:app', host=settings.HOST, port=settings.PORT, reload=True)

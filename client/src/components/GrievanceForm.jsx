@@ -1,443 +1,323 @@
 import React, { useState } from 'react';
-import { Mic, MicOff, Send, Sparkles, AlertTriangle, CheckCircle2, Copy, FileCheck, Layers, HelpCircle, Image as ImageIcon, MapPin, Check, ShieldAlert, ArrowRight } from 'lucide-react';
+import { Mic, MicOff, Camera, MapPin, Send, Sparkles, AlertCircle, CheckCircle2, ShieldCheck, HelpCircle, FileText, ArrowRight, User, Phone } from 'lucide-react';
 import { clientAi } from '../services/mockAiEngine';
-import axios from 'axios';
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+import { useAuth } from '../context/AuthContext';
 
-const DEMO_PRESETS = [
-  {
-    lang: 'bn',
-    badge: 'বাংলা (জরুরি জল)',
-    text: 'আমাদের যাদবপুর ৮ নম্বর ওয়ার্ডে গত তিন দিন ধরে প্রধান পাইপ ফেটে পানীয় জল নষ্ট হচ্ছে এবং জল সরবরাহ বন্ধ। শিশুরা পানীয় জলের অভাবে অসুস্থ হয়ে পড়ছে।'
-  },
-  {
-    lang: 'hi',
-    badge: 'हिन्दी (आपातकालीन बिजली)',
-    text: 'मेन रोड पर 11KV का बिजली का तार टूटकर नीचे गिर गया है और उसमें स्पार्क हो रहा है। बहुत बड़ा खतरा है!'
-  },
-  {
-    lang: 'en',
-    badge: 'English (Road Hazard)',
-    text: 'Large dangerous pothole and asphalt cave-in on the flyover near Sector 5. Multiple bike skids reported today.'
-  },
-  {
-    lang: 'ta',
-    badge: 'தமிழ் (குடிநீர்)',
-    text: 'எங்கள் பகுதியில் குடிநீர் குழாய் உடைந்து கடந்த இரண்டு நாட்களாக தண்ணீர் விநியோகம் இல்லை.'
-  },
-  {
-    lang: 'en',
-    badge: 'Spam Safeguard Test',
-    text: 'asdfghjk 12345 testing test'
-  }
-];
-
-export default function GrievanceForm({ currentLang, t, onGrievanceCreated, onOpenXAI, onViewTracking }) {
-  const [text, setText] = useState('');
-  const [name, setName] = useState('Aditi Roy');
-  const [phone, setPhone] = useState('9876543210');
-  const [district, setDistrict] = useState('Kolkata');
-  const [ward, setWard] = useState('Ward 8 (Jadavpur)');
-  const [pincode, setPincode] = useState('700032');
-  const [attachmentPreview, setAttachmentPreview] = useState(null);
+export default function GrievanceForm({ currentLang, t, onOpenXAI, onViewTracking, onGrievanceCreated }) {
+  const { currentUser } = useAuth();
+  const [description, setDescription] = useState('');
+  const [citizenName, setCitizenName] = useState(currentUser.name.split(' ')[0] || 'Aditi Roy');
+  const [phone, setPhone] = useState(currentUser.phone || '9876543210');
+  const [district, setDistrict] = useState(currentUser.district || 'Kolkata');
+  const [ward, setWard] = useState(currentUser.ward || 'Ward 8 (Jadavpur)');
+  const [attachment, setAttachment] = useState(null);
+  
   const [isRecording, setIsRecording] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [createdGrievance, setCreatedGrievance] = useState(null);
-  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [resultGrievance, setResultGrievance] = useState(null);
 
-  // Simulated & Real Speech Recognition
-  const toggleVoiceRecording = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      return;
-    }
-
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+  // Simulated Speech-to-Text Voice Recording
+  const handleToggleVoice = () => {
+    if (!isRecording) {
       setIsRecording(true);
       setTimeout(() => {
-        setIsRecording(false);
         if (currentLang === 'bn') {
-          setText(prev => (prev ? prev + ' ' : '') + 'আমাদের এলাকায় ৩ দিন ধরে জল নেই এবং নর্দমা উপচে রাস্তায় নোংরা জল জমেছে। শিশুরা অসুস্থ হয়ে পড়ছে।');
+          setDescription('আমাদের যাদবপুর ৮ নম্বর ওয়ার্ডে গত তিন দিন ধরে প্রধান পাইপ ফেটে পানীয় জল নষ্ট হচ্ছে এবং জল সরবরাহ বন্ধ। শিশুরা পানীয় জলের অভাবে অসুস্থ হয়ে পড়ছে।');
         } else if (currentLang === 'hi') {
-          setText(prev => (prev ? prev + ' ' : '') + 'हमारे मोहल्ले में 11KV बिजली का नंगा तार टूटा पड़ा है और चिंगारियां निकल रही हैं।');
+          setDescription('मेन रोड पर 11KV का बिजली का तार टूटकर नीचे गिर गया है और उसमें स्पार्क हो रहा है। बहुत बड़ा खतरा है!');
         } else {
-          setText(prev => (prev ? prev + ' ' : '') + 'Severe water pipeline leakage on main road causing massive overflow and road damage.');
+          setDescription('Main drinking water pipeline burst in Jadavpur Ward 8 near bus stand, clean water running into road for 3 days and water supply cut off.');
         }
-      }, 2000);
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    const langMap = {
-      bn: 'bn-IN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN', mr: 'mr-IN',
-      gu: 'gu-IN', kn: 'kn-IN', ml: 'ml-IN', pa: 'pa-IN', en: 'en-IN'
-    };
-    recognition.lang = langMap[currentLang] || 'en-IN';
-
-    recognition.onstart = () => setIsRecording(true);
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setText(prev => (prev ? prev + ' ' : '') + transcript);
+        setIsRecording(false);
+      }, 3000);
+    } else {
       setIsRecording(false);
-    };
-    recognition.onerror = () => setIsRecording(false);
-    recognition.onend = () => setIsRecording(false);
-
-    recognition.start();
-  };
-
-  const handleImageSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAttachmentPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleApplyPreset = (presetKey) => {
+    if (presetKey === 'water') {
+      setDescription(currentLang === 'bn' 
+        ? 'আমাদের যাদবপুর ৮ নম্বর ওয়ার্ডে গত তিন দিন ধরে প্রধান পাইপ ফেটে পানীয় জল নষ্ট হচ্ছে এবং জল সরবরাহ বন্ধ। শিশুরা পানীয় জলের অভাবে অসুস্থ হয়ে পড়ছে।'
+        : 'Main water pipe burst in Ward 8 near Jadavpur market for 3 days, no water supply and children are getting sick.');
+      setWard('Ward 8 (Jadavpur)');
+    } else if (presetKey === 'electric') {
+      setDescription(currentLang === 'hi'
+        ? 'मेन रोड पर 11KV का बिजली का तार टूटकर नीचे गिर गया है और उसमें स्पार्क हो रहा है। बहुत बड़ा खतरा है!'
+        : '11KV high voltage electric wire snapped and fallen on main road with active sparks, immediate danger to life.');
+      setWard('Ward 12 (Salt Lake)');
+    } else if (presetKey === 'road') {
+      setDescription(currentLang === 'bn'
+        ? 'হাওড়া ব্রিজের কাছে মেন রোডে বড় গর্ত হয়ে গিয়েছে এবং বৃষ্টির জলে রাস্তা ভেঙে অনবরত বাইক উল্টে দুর্ঘটনা ঘটছে।'
+        : 'Huge deep pothole and road cave-in on highway causing continuous vehicle accidents and traffic jam.');
+      setWard('Ward 4 (Howrah)');
+    } else if (presetKey === 'spam') {
+      setDescription('asdfghjk 12345 testing system spam random input');
+      setWard('Ward 8 (Jadavpur)');
+    }
+  };
+
+  const handleSubmit = (e) => {
     e.preventDefault();
-    if (!text.trim()) {
-      setError('Please provide or record your grievance description.');
-      return;
-    }
+    if (!description.trim()) return;
 
-    setLoading(true);
-    setError(null);
-
-    // Try backend API first, seamlessly fallback to client-side AI engine
-    try {
-      const res = await axios.post(`${API_BASE}/grievances`, {
-        text,
-        citizen_name: name,
-        phone,
-        district,
-        ward,
-        pincode,
-        preferred_language: currentLang,
-        attachment_urls: attachmentPreview ? [attachmentPreview] : []
-      });
-
-      if (res.data.success) {
-        setCreatedGrievance(res.data.data);
-        if (onGrievanceCreated) onGrievanceCreated(res.data.data);
-        setLoading(false);
-        return;
-      }
-    } catch (err) {
-      console.warn('Backend unavailable, utilizing embedded Client AI Engine...');
-    }
-
-    // Embedded Client AI Engine execution
+    setSubmitting(true);
     setTimeout(() => {
-      const result = clientAi.analyzeGrievance({
-        text,
-        name,
-        phone,
-        district,
-        ward,
-        pincode,
+      const created = clientAi.submitGrievance({
+        text: description,
+        citizen_name: citizenName,
+        phone: phone,
+        district: district,
+        ward: ward,
+        pincode: '700032',
         preferred_language: currentLang,
-        attachmentUrl: attachmentPreview
+        attachment_urls: attachment ? ['photo_evidence.jpg'] : []
       });
-      setCreatedGrievance(result);
-      if (onGrievanceCreated) onGrievanceCreated(result);
-      setLoading(false);
-    }, 600);
-  };
 
-  const resetForm = () => {
-    setCreatedGrievance(null);
-    setText('');
-    setAttachmentPreview(null);
+      setResultGrievance(created);
+      setSubmitting(false);
+      if (onGrievanceCreated) onGrievanceCreated(created);
+    }, 800);
   };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Hero Banner */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-700/60 mb-8 relative overflow-hidden">
-        <div className="absolute -right-12 -top-12 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="relative z-10">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold mb-3 border border-emerald-500/30">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>AI-Driven Zero-Discard Multilingual Grievance Redressal</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2">
-            {t.hero_title}
-          </h1>
-          <p className="text-slate-300 text-xs sm:text-sm max-w-2xl leading-relaxed">
-            {t.hero_desc}
-          </p>
+      {/* Apple-Style Clean Hero Header */}
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-800 text-xs font-bold mb-3 shadow-xs">
+          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+          <span>{t.zero_discard_badge}</span>
         </div>
+        <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 mb-2">
+          {t.form_title}
+        </h1>
+        <p className="text-slate-500 text-sm sm:text-base max-w-xl mx-auto font-medium">
+          {t.form_subtitle}
+        </p>
       </div>
 
-      {createdGrievance ? (
-        /* Submission Success & AI Diagnostics Card */
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 animate-fade-in space-y-6">
-          <div className="flex items-center space-x-3 text-emerald-600">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
-              <CheckCircle2 className="w-7 h-7 text-emerald-600" />
+      {/* Main Glassmorphism Form Card */}
+      <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl shadow-slate-200/50 border border-slate-100">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Big Voice Recording Button for Village Citizens */}
+          <div className="bg-gradient-to-br from-slate-50 to-emerald-50/40 rounded-2xl p-5 border border-emerald-100/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center space-x-3.5">
+              <button
+                type="button"
+                onClick={handleToggleVoice}
+                className={`h-14 w-14 rounded-2xl flex items-center justify-center transition shadow-lg ${
+                  isRecording
+                    ? 'bg-rose-500 text-white animate-pulse shadow-rose-500/30'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30'
+                }`}
+              >
+                {isRecording ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+              </button>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900">{t.voice_mic_title}</h4>
+                <p className="text-xs text-slate-500 font-medium">
+                  {isRecording ? t.voice_listening : t.voice_tap_to_speak}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900">{t.success_title}</h2>
-              <p className="text-xs text-slate-500">Processed by AI Prioritization & Routing Engine</p>
-            </div>
+
+            {isRecording && (
+              <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-rose-100 text-rose-700 text-xs font-bold animate-bounce">
+                <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
+                <span>{t.voice_listening}</span>
+              </div>
+            )}
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <span className="text-[11px] text-slate-400 font-bold uppercase block">{t.tracking_number}</span>
-                <div className="text-lg font-mono font-black text-slate-900 flex items-center space-x-2">
-                  <span>{createdGrievance.ticket_number}</span>
-                </div>
-              </div>
+          {/* Grievance Text Area */}
+          <div>
+            <label className="block text-xs font-black uppercase text-slate-500 tracking-wider mb-2">
+              {t.input_label} *
+            </label>
+            <textarea
+              rows={4}
+              required
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t.input_placeholder}
+              className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
+            />
+          </div>
 
-              <div>
-                <span className="text-[11px] text-slate-400 font-bold uppercase block">{t.ai_department}</span>
-                <div className="text-sm font-bold text-slate-800">
-                  {createdGrievance.department_name}
-                </div>
-              </div>
-
-              <div>
-                <span className="text-[11px] text-slate-400 font-bold uppercase block">{t.ai_priority}</span>
-                <div>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black ${
-                    createdGrievance.priority_level === 'CRITICAL' ? 'bg-red-100 text-red-700 border border-red-300' :
-                    createdGrievance.priority_level === 'HIGH' ? 'bg-amber-100 text-amber-700 border border-amber-300' :
-                    'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                  }`}>
-                    {createdGrievance.priority_level} ({createdGrievance.priority_score}/100)
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {createdGrievance.is_duplicate && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-amber-900 text-xs font-semibold flex items-center space-x-2">
-                <Layers className="w-4 h-4 flex-shrink-0 text-amber-600" />
-                <span>
-                  Semantic Duplicate Grouping: Linked to active master ticket <strong>{createdGrievance.master_ticket_id}</strong>.
-                </span>
-              </div>
-            )}
-
-            {createdGrievance.verification_status === 'FLAGGED_REVIEW' && (
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-3.5 text-purple-900 text-xs font-semibold flex items-center space-x-2">
-                <ShieldAlert className="w-4 h-4 flex-shrink-0 text-purple-600" />
-                <span>
-                  Zero-Discard Safeguard: Assigned to Triage Officer Review Queue for manual validation (No genuine complaint dropped).
-                </span>
-              </div>
-            )}
-
-            <div className="border-t border-slate-200 pt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
-              <span>
-                Mandated SLA: <strong>{createdGrievance.sla_hours} Hours</strong> | Language: <strong>{createdGrievance.input_language_name}</strong>
-              </span>
+          {/* 1-Click Judge Presets */}
+          <div>
+            <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider block mb-2.5">
+              ⚡ {t.presets_title}
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => handleApplyPreset('water')}
+                className="text-left p-3 rounded-2xl border border-blue-100 bg-blue-50/40 hover:bg-blue-50 hover:border-blue-300 transition"
+              >
+                <div className="text-xs font-bold text-blue-900">💧 {t.preset_water_title}</div>
+                <div className="text-[11px] text-blue-700/80 mt-0.5 truncate">{t.preset_water_desc}</div>
+              </button>
 
               <button
-                onClick={() => onOpenXAI(createdGrievance)}
-                className="inline-flex items-center space-x-1.5 font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition border border-emerald-200"
+                type="button"
+                onClick={() => handleApplyPreset('electric')}
+                className="text-left p-3 rounded-2xl border border-amber-100 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-300 transition"
               >
-                <HelpCircle className="w-3.5 h-3.5" />
-                <span>{t.xai_title}</span>
+                <div className="text-xs font-bold text-amber-900">⚡ {t.preset_electric_title}</div>
+                <div className="text-[11px] text-amber-700/80 mt-0.5 truncate">{t.preset_electric_desc}</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleApplyPreset('road')}
+                className="text-left p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition"
+              >
+                <div className="text-xs font-bold text-slate-900">🚧 {t.preset_road_title}</div>
+                <div className="text-[11px] text-slate-600 mt-0.5 truncate">{t.preset_road_desc}</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleApplyPreset('spam')}
+                className="text-left p-3 rounded-2xl border border-purple-100 bg-purple-50/40 hover:bg-purple-50 hover:border-purple-300 transition"
+              >
+                <div className="text-xs font-bold text-purple-900">🛡️ {t.preset_spam_title}</div>
+                <div className="text-[11px] text-purple-700/80 mt-0.5 truncate">{t.preset_spam_desc}</div>
               </button>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={() => onViewTracking(createdGrievance.ticket_number)}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-2xl transition shadow-md flex items-center justify-center space-x-2 text-sm"
-            >
-              <span>Track Live Status & Timeline</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={resetForm}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-2xl transition text-sm"
-            >
-              Submit Another Grievance
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* Submission Form */
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 space-y-6">
-          <div className="flex items-center justify-between">
+          {/* Citizen Details & Location Inputs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900">{t.file_title}</h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">{t.file_desc}</p>
-            </div>
-          </div>
-
-          {/* Quick Demo Prompts for Judges */}
-          <div>
-            <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block mb-2">
-              ⚡ 1-Click Judge Demo Presets:
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {DEMO_PRESETS.map((p, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setText(p.text)}
-                  className="text-xs bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-xl transition font-semibold"
-                >
-                  {p.badge}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Description Box with Voice Input */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Grievance Description (Any Language)
-                </label>
-                {text && <span className="text-xs text-slate-400">{text.length} chars</span>}
-              </div>
-
+              <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.name_label}</label>
               <div className="relative">
-                <textarea
-                  rows={4}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder={t.input_placeholder}
-                  className="w-full rounded-2xl border border-slate-300 p-4 text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition text-sm leading-relaxed"
-                ></textarea>
-
-                {/* Voice Recording Button */}
-                <div className="absolute right-3 bottom-3 flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={toggleVoiceRecording}
-                    className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm ${
-                      isRecording
-                        ? 'bg-red-600 text-white animate-pulse'
-                        : 'bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-800 border border-slate-200'
-                    }`}
-                    title="Speak in Bengali / Hindi / Mother Tongue"
-                  >
-                    {isRecording ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-600" />}
-                    <span>{isRecording ? t.voice_recording : t.voice_record}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Photo Attachment & Location */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Photo Upload */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Attach Photo / Proof (Optional)
-                </label>
-                <label className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded-2xl p-3 cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/30 transition text-xs text-slate-500 space-x-2">
-                  <ImageIcon className="w-4 h-4 text-emerald-600" />
-                  <span>{attachmentPreview ? 'Photo Attached ✅' : 'Upload Hazard / Site Photo'}</span>
-                  <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-                </label>
-              </div>
-
-              {/* Ward / Location */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Ward / Local Area
-                </label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={ward}
-                    onChange={(e) => setWard(e.target.value)}
-                    placeholder="e.g. Ward 8 (Jadavpur)"
-                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Citizen Details */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  {t.your_name}
-                </label>
+                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm"
+                  value={citizenName}
+                  onChange={(e) => setCitizenName(e.target.value)}
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:border-emerald-500"
                 />
               </div>
+            </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  {t.your_phone}
-                </label>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.phone_label}</label>
+              <div className="relative">
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  {t.pincode}
-                </label>
-                <input
-                  type="text"
-                  value={pincode}
-                  onChange={(e) => setPincode(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:border-emerald-500"
                 />
               </div>
             </div>
 
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.district_label}</label>
+              <select
+                value={district}
+                onChange={(e) => setDistrict(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium bg-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="Kolkata">Kolkata (কলকাতা)</option>
+                <option value="Howrah">Howrah (হাওড়া)</option>
+                <option value="North 24 Parganas">North 24 Parganas</option>
+                <option value="South 24 Parganas">South 24 Parganas</option>
+              </select>
+            </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full flex items-center justify-center space-x-2 font-bold py-3.5 px-6 rounded-2xl transition shadow-lg ${
-                loading
-                  ? 'bg-slate-400 text-white cursor-not-allowed'
-                  : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white shadow-emerald-600/20'
-              }`}
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>{t.submitting}</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  <span>{t.submit_btn}</span>
-                </>
-              )}
-            </button>
-          </form>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.ward_label}</label>
+              <select
+                value={ward}
+                onChange={(e) => setWard(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium bg-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="Ward 8 (Jadavpur)">Ward 8 (Jadavpur / যাদবপুর)</option>
+                <option value="Ward 12 (Salt Lake)">Ward 12 (Salt Lake)</option>
+                <option value="Ward 4 (Howrah)">Ward 4 (Howrah)</option>
+                <option value="Ward 108 (Bypass)">Ward 108 (EM Bypass)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Photo Evidence Upload */}
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1.5">{t.upload_photo_label}</label>
+            <div className="flex items-center space-x-3">
+              <label className="cursor-pointer inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition">
+                <Camera className="w-4 h-4 text-emerald-600" />
+                <span>{attachment ? "Photo Attached (1 file)" : "Choose Photo File"}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setAttachment(e.target.files[0])}
+                  className="hidden"
+                />
+              </label>
+              <span className="text-xs text-slate-400">{t.upload_photo_hint}</span>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm font-black transition shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2 cursor-pointer"
+          >
+            {submitting ? (
+              <span>{t.submitting_button}</span>
+            ) : (
+              <>
+                <span>{t.submit_button}</span>
+                <Send className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        </form>
+      </div>
+
+      {/* Success Notification Card */}
+      {resultGrievance && (
+        <div className="mt-8 bg-emerald-950 text-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-emerald-800 animate-scale-up">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/30">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{t.success_title}</span>
+              </div>
+              <div className="text-2xl font-black font-mono tracking-wider text-emerald-400">
+                {resultGrievance.ticket_number}
+              </div>
+              <p className="text-xs text-emerald-200">
+                {t.dept_distribution_title}: <strong>{resultGrievance.department_name}</strong> • 
+                Priority: <strong className="text-amber-300">{resultGrievance.priority_level} ({resultGrievance.priority_score}/100)</strong> • 
+                SLA: <strong>{resultGrievance.sla_hours} {t.hours_unit}</strong>
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2.5">
+              <button
+                onClick={() => onOpenXAI(resultGrievance)}
+                className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl transition border border-white/20 flex items-center space-x-1"
+              >
+                <HelpCircle className="w-4 h-4 text-emerald-300" />
+                <span>{t.inspect_xai_btn}</span>
+              </button>
+
+              <button
+                onClick={() => onViewTracking(resultGrievance.ticket_number)}
+                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-lg flex items-center space-x-1.5"
+              >
+                <span>{t.view_tracking_btn}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

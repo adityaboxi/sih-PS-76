@@ -1,0 +1,107 @@
+[
+  {
+    "id": "g-101",
+    "ticket_number": "GR-2026-WB-1001",
+    "citizen_name": "Aditi Roy",
+    "phone": "9876543210",
+    "original_text": "আমাদের যাদবপুর ৮ নম্বর ওয়ার্ডে গত তিন দিন ধরে প্রধান পাইপ ফেটে পানীয় জল নষ্ট হচ্ছে এবং জল সরবরাহ বন্ধ রয়েছে। এলাকার বাচ্চারা অসুস্থ হয়ে পড়ছে।",
+    "input_language": "bn",
+    "input_language_name": "Bengali (বাংলা)",
+    "normalized_english_text": "water pipeline burst drinking water supply cut children sick",
+    "department_id": "WATER_SUPPLY",
+    "department_name": "Water Supply & Sanitation",
+    "sub_category": "Water Supply & Sanitation (Water Resolution)",
+    "priority_level": "CRITICAL",
+    "priority_score": 92,
+    "sla_hours": 4,
+    "district": "Kolkata",
+    "pincode": "700032",
+    "is_duplicate": false,
+    "master_ticket_id": null,
+    "duplicate_count": 3,
+    "spam_score": 0.1,
+    "verification_status": "VERIFIED",
+    "status": "IN_PROGRESS",
+    "assigned_officer": "Er. Soumen Banerjee (Executive Engineer)",
+    "reasoning": {
+      "rule_applied": "Govt_Civic_SLA_Triage_Policy_2026_CRITICAL",
+      "key_triggers": [
+        "জল",
+        "পাইপ ফেটে",
+        "অসুস্থ",
+        "বাচ্চারা"
+      ],
+      "rationale_en": "Classified into Water Supply & Sanitation with CRITICAL priority (Score: 92/100) due to pipeline burst and children falling sick. Mandated SLA: 4 hours.",
+      "rationale_local": "অভিযোগটিকে জল সরবরাহ ও স্যানিটেশন বিভাগে অন্তর্ভুক্ত করা হয়েছে এবং জরুরি স্তর CRITICAL (স্কোর: ৯২/১০০) ধার্য করা হয়েছে কারণ এতে পাইপ ফেটে যাওয়া ও শিশুদের অসুস্থতার তথ্য রয়েছে।"
+    },
+    "timeline": [
+      {
+        "timestamp": "2026-08-28T17:10:30.423Z",
+        "title": "Grievance Submitted",
+        "desc": "Submitted by citizen via Web Portal in Bengali."
+      },
+      {
+        "timestamp": "2026-08-28T17:16:30.423Z",
+        "title": "AI Triage & Prioritization",
+        "desc": "AI classified as CRITICAL (Score 92) -> Water Supply Department."
+      },
+      {
+        "timestamp": "2026-08-28T18:40:30.423Z",
+        "title": "Officer Assigned",
+        "desc": "Dispatched to Executive Engineer Soumen Banerjee."
+      }
+    ],
+    "created_at": "2026-08-28T17:10:30.423Z",
+    "updated_at": "2026-08-28T20:10:30.423Z"
+  },
+  {
+    "id": "g-102",
+    "ticket_number": "GR-2026-WB-1002",
+    "citizen_name": "Ramesh Sharma",
+    "phone": "9830112233",
+    "original_text": "मेन रोड पर 11KV का बिजली का तार टूटकर नीचे गिर गया है और उसमें स्पार्क हो रहा है। बहुत बड़ा खतरा है!",
+    "input_language": "hi",
+    "input_language_name": "Hindi (हिन्दी)",
+    "normalized_english_text": "main road 11kv electricity wire broken spark big danger",
+    "department_id": "ELECTRICITY_POWER",
+    "department_name": "Electricity & Power Distribution",
+    "sub_category": "Electricity & Power Distribution (Spark Hazard)",
+    "priority_level": "CRITICAL",
+    "priority_score": 98,
+    "sla_hours": 2,
+    "district": "Howrah",
+    "pincode": "711101",
+    "is_duplicate": false,
+    "master_ticket_id": null,
+    "duplicate_count": 1,
+    "spam_score": 0.05,
+    "verification_status": "VERIFIED",
+    "status": "IN_PROGRESS",
+    "assigned_officer": "K. N. Verma (Power Grid Inspector)",
+    "reasoning": {
+      "rule_applied": "Govt_Civic_SLA_Triage_Policy_2026_CRITICAL",
+      "key_triggers": [
+        "बिजली",
+        "तार टूट",
+        "स्पार्क",
+        "खतरा"
+      ],
+      "rationale_en": "Classified into Electricity & Power with CRITICAL priority (Score: 98/100) due to fallen live wire and sparking hazards. Mandated SLA: 2 hours.",
+      "rationale_local": "शिकायत को विद्युत एवं ऊर्जा वितरण विभाग में वर्गीकृत किया गया है और तात्कालिकता स्तर CRITICAL (स्कोर: 98/100) तय किया गया है क्योंकि इसमें टूटा हुआ तार व स्पार्किंग का खतरा है।"
+    },
+    "timeline": [
+      {
+        "timestamp": "2026-08-28T18:58:30.423Z",
+        "title": "Grievance Submitted",
+        "desc": "Submitted by citizen via Voice Transcription in Hindi."
+      },
+      {
+        "timestamp": "2026-08-28T19:04:30.423Z",
+        "title": "AI Emergency Escalation",
+        "desc": "AI flagged immediate live wire hazard -> 2-hour SLA."
+      }
+    ],
+    "created_at": "2026-08-28T18:58:30.423Z",
+    "updated_at": "2026-08-28T20:10:30.423Z"
+  }
+]

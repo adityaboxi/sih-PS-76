@@ -1,87 +1,163 @@
-import json
 import os
+import json
+import logging
+import math
 import re
-from typing import Dict, Any, List
+from app.core.config import settings
 
-CHARTER_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "citizen_charter.json")
+logger = logging.getLogger("jansetu-ai")
+
+class LocalVectorDatabase:
+    def __init__(self):
+        self.documents = []
+        self.vectors = []
+        self.vocabulary = {}
+
+    def _tokenize(self, text: str) -> list:
+        return re.findall(r"\w+", text.lower())
+
+    def _compute_tf_idf_vector(self, tokens: list) -> list:
+        vec = [0.0] * len(self.vocabulary)
+        for t in tokens:
+            if t in self.vocabulary:
+                idx = self.vocabulary[t]
+                vec[idx] += 1.0
+        norm = math.sqrt(sum(x * x for x in vec))
+        if norm > 0:
+            vec = [x / norm for x in vec]
+        return vec
+
+    def index_documents(self, raw_docs: list):
+        self.documents = raw_docs
+        all_tokens_list = []
+        vocab_set = set()
+
+        for doc in raw_docs:
+            combined_text = f"{doc.get('name', '')} {doc.get('department_name', '')} {doc.get('description', '')} {doc.get('question', '')} {doc.get('answer', '')} {doc.get('sla_rule', '')}"
+            tokens = self._tokenize(combined_text)
+            all_tokens_list.append(tokens)
+            vocab_set.update(tokens)
+
+        self.vocabulary = {word: i for i, word in enumerate(sorted(vocab_set))}
+        self.vectors = [self._compute_tf_idf_vector(tokens) for tokens in all_tokens_list]
+        logger.info(f"📚 Vector DB indexed {len(self.documents)} documents across {len(self.vocabulary)} dimensions.")
+
+    def similarity_search(self, query: str, top_k: int = 2) -> list:
+        if not self.vectors:
+            return self.documents[:top_k]
+
+        q_tokens = self._tokenize(query)
+        q_vec = self._compute_tf_idf_vector(q_tokens)
+
+        scores = []
+        for idx, doc_vec in enumerate(self.vectors):
+            dot_product = sum(a * b for a, b in zip(q_vec, doc_vec))
+            scores.append((dot_product, self.documents[idx]))
+
+        scores.sort(key=lambda x: x[0], reverse=True)
+        return [doc for score, doc in scores[:top_k]]
+
 
 class MultilingualRAGAssistant:
     def __init__(self):
-        with open(CHARTER_PATH, "r", encoding="utf-8") as f:
-            self.knowledge_data = json.load(f)
-        self.departments = self.knowledge_data.get("departments", [])
-        self.faqs = self.knowledge_data.get("faq_kb", [])
+        self.llm = None
+        self.api_key = settings.GEMINI_API_KEY
+        self.vector_db = LocalVectorDatabase()
+        self._initialize_vector_store()
 
-    def answer_query(self, query: str, lang_code: str = "en") -> Dict[str, Any]:
-        query_lower = query.lower()
-        
-        # 1. Check if user is asking about specific ticket tracking
-        tracking_match = re.search(r'gr-\d{4}-[a-z]{2}-\d+', query_lower)
-        if tracking_match:
-            ticket_id = tracking_match.group(0).upper()
-            if lang_code == "bn":
-                reply = f"আপনার অভিযোগ {ticket_id} সফলভাবে ট্র্যাক করা হয়েছে। সংশ্লিষ্ট বিভাগ তৎপরতার সাথে কাজ করছে এবং নির্ধারিত সময়ের মধ্যে নিষ্পত্তি সম্পন্ন হবে।"
-            elif lang_code == "hi":
-                reply = f"आपकी शिकायत {ticket_id} ट्रैक कर ली गई है। संबंधित विभाग द्वारा कार्यवाही की जा रही है और इसे निर्धारित समय में हल किया जाएगा।"
-            else:
-                reply = f"Your grievance ticket {ticket_id} has been tracked. It is currently under active resolution by the nodal officer within the mandated SLA."
-            return {
-                "reply": reply,
-                "detected_language": lang_code,
-                "cited_sources": [f"National Grievance Tracking Engine: {ticket_id}"],
-                "suggested_actions": ["View Full Timeline", "Download Acknowledgement PDF", "Escalate to District Collector"]
-            }
+        if self.api_key:
+            try:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                self.llm = ChatGoogleGenerativeAI(
+                    model=settings.MODEL_NAME,
+                    google_api_key=self.api_key,
+                    temperature=0.2,
+                    max_output_tokens=512
+                )
+                logger.info(f"⚡ LangChain Gemini RAG active with model: {settings.MODEL_NAME}")
+            except Exception as e:
+                logger.warn(f"LangChain Gemini RAG init notice: {e}")
 
-        # 2. Check FAQs knowledge base
-        for faq in self.faqs:
-            q_text = (faq.get("q_en", "") + " " + faq.get("q_bn", "") + " " + faq.get("q_hi", "")).lower()
-            overlap = any(w in query_lower for w in ["ration", "রেশন", "राशन", "card", "কার্ড", "कार्ड"]) and any(w in query_lower for w in ["apply", "নতুন", "नया", "document", "কাগজ", "दस्तावेज"])
-            if overlap or any(kw in query_lower for kw in ["wire", "তার", "तार", "current", "electric", "কারেন্ট", "बिजली"]):
-                if lang_code == "bn":
-                    reply = faq.get("ans_bn", faq.get("ans_en"))
-                elif lang_code == "hi":
-                    reply = faq.get("ans_hi", faq.get("ans_en"))
-                else:
-                    reply = faq.get("ans_en")
+    def _initialize_vector_store(self):
+        kb_path = os.path.join(os.path.dirname(__file__), "..", "data", "citizen_charter.json")
+        if os.path.exists(kb_path):
+            try:
+                with open(kb_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    raw_docs = []
+                    if isinstance(data, dict):
+                        if "departments" in data:
+                            raw_docs.extend(data["departments"])
+                        if "faq_kb" in data:
+                            raw_docs.extend(data["faq_kb"])
+                    elif isinstance(data, list):
+                        raw_docs = data
+                    self.vector_db.index_documents(raw_docs)
+            except Exception as e:
+                logger.warn(f"Error loading citizen charter: {e}")
+
+    def answer_query(self, query: str, language_code: str = "bn") -> dict:
+        retrieved_docs = self.vector_db.similarity_search(query, top_k=2)
+        context_str = json.dumps(retrieved_docs, ensure_ascii=False, indent=2)
+
+        if self.llm:
+            try:
+                from langchain_core.prompts import PromptTemplate
+                from langchain_core.output_parsers import StrOutputParser
+
+                prompt_text = (
+                    "You are Nagrik Sahayak, an official 24x7 AI Assistant for Indian Public Grievances (SIH PS 76).\n"
+                    "Answer the citizen question using the retrieved context.\n\n"
+                    "CONTEXT:\n{context}\n\n"
+                    "QUESTION: {query}\n\n"
+                    "TARGET LANGUAGE CODE: {language_code}"
+                )
+
+                prompt = PromptTemplate(
+                    template=prompt_text,
+                    input_variables=["language_code", "context", "query"]
+                )
+
+                chain = prompt | self.llm | StrOutputParser()
+                response = chain.invoke({
+                    "language_code": language_code,
+                    "context": context_str,
+                    "query": query
+                })
+
+                sources = [d.get("name", d.get("question", "Citizen Charter SOP 2026")) for d in retrieved_docs]
+
                 return {
-                    "reply": reply,
-                    "detected_language": lang_code,
-                    "cited_sources": ["Citizen's Charter & Public Service Guarantee Act"],
-                    "suggested_actions": ["File a New Grievance", "Check Required Documents", "Call Emergency Helpline"]
+                    "reply": response.strip(),
+                    "detected_language": language_code,
+                    "cited_sources": sources,
+                    "suggested_actions": ["File Grievance", "Track Status"]
                 }
+            except Exception as e:
+                logger.warn(f"Gemini RAG generation notice: {e}")
 
-        # 3. Department matching
-        for dept in self.departments:
-            for kw in dept.get("keywords", []):
-                if kw in query_lower:
-                    if lang_code == "bn":
-                        reply = f"আপনার প্রশ্নটি '{dept.get('name_bn', dept['name_en'])}'-এর আওতাভুক্ত। {dept.get('charter')}"
-                    elif lang_code == "hi":
-                        reply = f"आपका प्रश्न '{dept.get('name_hi', dept['name_en'])}' से संबंधित है। {dept.get('charter')}"
-                    else:
-                        reply = f"Your query relates to '{dept['name_en']}'. Department charter: {dept.get('charter')}"
-                    return {
-                        "reply": reply,
-                        "detected_language": lang_code,
-                        "cited_sources": [f"Citizen Charter - {dept['name_en']}"],
-                        "suggested_actions": ["Submit Grievance to this Department", "View Active Ward Officers", "Check Department SLA Guidelines"]
-                    }
+        best_doc = retrieved_docs[0] if retrieved_docs else {}
+        dept = best_doc.get("name", "Public Administration")
+        sla = best_doc.get("default_sla_hours", 48)
 
-        # Default fallback contextual response in citizen's selected language
-        if lang_code == "bn":
-            reply = "নমস্কার! আমি নাগরিক সহায়ক এআই। আপনি যেকোনো ভাষায় সরকারি নাগরিক পরিষেবা, অভিযোগ দাখিল বা টিকিট ট্র্যাকিং সংক্রান্ত প্রশ্ন করতে পারেন। আমি কীভাবে সাহায্য করতে পারি?"
-        elif lang_code == "hi":
-            reply = "नमस्ते! मैं नागरिक सहायक एआई हूँ। आप किसी भी सरकारी सेवा, शिकायत दर्ज करने या ट्रैकिंग के संबंध में प्रश्न पूछ सकते हैं। मैं आपकी क्या मदद कर सकता हूँ?"
-        elif lang_code == "ta":
-            reply = "வணக்கம்! நான் குடிமக்கள் உதவி AI. அரசு சேவைகள் மற்றும் புகார் கண்காணிப்பு குறித்து என்னிடம் கேட்கலாம்."
-        elif lang_code == "te":
-            reply = "నమస్కారం! నేను పౌర సహాయక AI. ప్రభుత్వ సేవలు మరియు ఫిర్యాదుల ట్రాకింగ్ గురించి మీరు నన్ను అడగవచ్చు."
+        if language_code == "bn":
+            if "জল" in query or "water" in query.lower() or "পাইপ" in query:
+                reply = "জল সরবরাহ সংক্রান্ত সমস্যার জন্য আমাদের দপ্তর ৪ ঘণ্টার মধ্যে জরুরি মেরামত দল পাঠায় (হেল্পলাইন: ১৮০০-৩৪৫-৫৫৫৫)। আপনি এই পোর্টাল থেকেই সরাসরি অভিযোগ দাখিল করতে পারেন।"
+            elif "বিদ্যুৎ" in query or "electric" in query.lower() or "তার" in query:
+                reply = "ছেঁড়া বিদ্যুৎ তার বা স্পার্কিংয়ের ক্ষেত্রে অবিলম্বে বিদ্যুৎ হেল্পলাইন ১৯১২ অথবা ১১২ তে কল করুন। আমাদের পোর্টালে অভিযোগ দাখিল করলে ২ ঘণ্টার মধ্যে জরুরি কর্মী পৌঁছাবে।"
+            else:
+                reply = f"নমস্কার! আমি নাগরিক সহায়ক। {dept} এর নিয়ম অনুযায়ী অভিযোগের সর্বোচ্চ সমাধান সময়সীমা {sla} ঘণ্টা। আপনি সরাসরি এই পোর্টাল থেকে অভিযোগ দাখিল বা ট্র্যাক করতে পারেন।"
         else:
-            reply = "Hello! I am your AI Citizen Assistant. You can ask me questions regarding civic departments, government schemes, filing complaints, or tracking ticket status in any Indian language."
+            if "water" in query.lower() or "pipe" in query.lower():
+                reply = "For drinking water pipeline emergencies, our Water Supply department dispatches field repair crews within a 4-hour SLA window (Helpline: 1800-345-5555)."
+            elif "electric" in query.lower() or "wire" in query.lower():
+                reply = "For snapped live wires or electrical sparks, call emergency 1912 or 112 immediately. Tickets filed here receive an emergency 2-hour Critical SLA."
+            else:
+                reply = f"Namaste! I am Nagrik Sahayak. Under {dept} SOP, issues are resolved within {sla} hours. You can file or track your grievance directly here."
 
         return {
             "reply": reply,
-            "detected_language": lang_code,
-            "cited_sources": ["National Citizen Service Portal Standard Operating Procedures (SOP 2026)"],
-            "suggested_actions": ["How to file a water supply complaint", "Electricity outage emergency numbers", "Track my grievance ticket"]
+            "detected_language": language_code,
+            "cited_sources": [best_doc.get("name", "Citizen Charter SOP 2026")],
+            "suggested_actions": ["File Grievance", "Track Status"]
         }

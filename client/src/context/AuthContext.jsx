@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { PAN_INDIA_GEOGRAPHY } from '../locales/panIndiaGeo';
+import { notificationService } from '../services/notificationService';
 
 export const DEMO_ROLES = [
   {
     id: 'citizen',
     name: 'Aditi Roy',
     role: 'CITIZEN',
-    title: 'Citizen (नागरिक / নাগরিক)',
-    phone: '9876543210',
+    title: 'Citizen',
     email: 'aditi.roy@citizen.gov.in',
+    phone: '9876543210',
     state: 'West Bengal',
     district: 'Kolkata',
     ward: 'Ward 8 (Jadavpur)',
@@ -22,8 +23,8 @@ export const DEMO_ROLES = [
     departmentId: 'WATER_SUPPLY',
     departmentName: 'Water Supply & Jal Jeevan Mission',
     title: 'Nodal Officer (Water Supply)',
-    phone: '9820011223',
     email: 'rajesh.deshmukh@mh.gov.in',
+    phone: '9820011223',
     state: 'Maharashtra',
     district: 'Mumbai Suburban',
     preferredLanguage: 'en',
@@ -36,8 +37,8 @@ export const DEMO_ROLES = [
     departmentId: 'ELECTRICITY_POWER',
     departmentName: 'State Electricity Distribution (DISCOM)',
     title: 'Executive Engineer (Power Grid)',
-    phone: '9415022334',
     email: 'kn.verma@uppcl.gov.in',
+    phone: '9415022334',
     state: 'Uttar Pradesh',
     district: 'Lucknow',
     preferredLanguage: 'en',
@@ -48,8 +49,8 @@ export const DEMO_ROLES = [
     name: 'P. Mukherjee',
     role: 'TRIAGE_SUPERVISOR',
     title: 'Zero-Discard Triage Supervisor',
-    phone: '9830099887',
     email: 'p.mukherjee@jansetu.gov.in',
+    phone: '9830099887',
     state: 'National Portal',
     district: 'Central Triage Cell',
     preferredLanguage: 'en',
@@ -60,8 +61,8 @@ export const DEMO_ROLES = [
     name: 'Dr. Anand Kumar, IAS',
     role: 'ADMIN_COLLECTOR',
     title: 'District Magistrate & Collector (IAS)',
-    phone: '9945033445',
     email: 'collector.bengaluru@kar.nic.in',
+    phone: '9945033445',
     state: 'Karnataka',
     district: 'Bengaluru Urban',
     preferredLanguage: 'en',
@@ -72,19 +73,18 @@ export const DEMO_ROLES = [
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  // STRICT AUTHENTICATION: Must Sign Up or Log In first
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const saved = localStorage.getItem('jansetu_auth_session_v3');
+      const saved = localStorage.getItem('jansetu_auth_session_email_v4');
       if (saved) {
         return JSON.parse(saved);
       }
     } catch (e) {}
-    return null; // Start logged out
+    return null; // Start unauthenticated
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem('jansetu_auth_session_v3');
+    return !!localStorage.getItem('jansetu_auth_session_email_v4');
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -93,19 +93,20 @@ export function AuthProvider({ children }) {
     setCurrentUser(userData);
     setIsAuthenticated(true);
     try {
-      localStorage.setItem('jansetu_auth_session_v3', JSON.stringify(userData));
+      localStorage.setItem('jansetu_auth_session_email_v4', JSON.stringify(userData));
     } catch (e) {}
   };
 
-  const registerCitizen = ({ name, phone, state, district, ward, preferredLanguage }) => {
-    const p = phone || '9876543210';
+  // Email-Based Citizen Registration
+  const registerCitizenWithEmail = ({ name, email, password, state, district, ward, preferredLanguage }) => {
+    const cleanEmail = email.trim().toLowerCase();
     const newUser = {
-      id: 'citizen_' + p,
+      id: 'citizen_' + cleanEmail.replace(/[^a-zA-Z0-9]/g, '_'),
       name: name || 'Citizen User',
       role: 'CITIZEN',
-      title: 'Citizen (नागरिक / নাগরিক)',
-      phone: p,
-      email: p + '@citizen.nic.in',
+      title: 'Citizen',
+      email: cleanEmail,
+      phone: '9876543210',
       state: state || 'West Bengal',
       district: district || 'Kolkata',
       ward: ward || 'Ward 8 (Jadavpur)',
@@ -113,20 +114,27 @@ export function AuthProvider({ children }) {
       allowedTabs: ['citizen_home', 'file', 'track']
     };
     loginUser(newUser);
+
+    // Dispatch welcome notification to user's real email
+    try {
+      notificationService.dispatchWelcomeEmail(cleanEmail, name);
+    } catch (e) {}
+
     return newUser;
   };
 
-  const registerOfficer = ({ name, email, departmentId, departmentName, state, district, role }) => {
-    const em = email || 'officer@gov.in';
+  // Email-Based Official Registration
+  const registerOfficerWithEmail = ({ name, email, departmentId, departmentName, state, district, role }) => {
+    const cleanEmail = email.trim().toLowerCase();
     const newUser = {
-      id: 'officer_' + Date.now(),
+      id: 'officer_' + cleanEmail.replace(/[^a-zA-Z0-9]/g, '_'),
       name: name || 'Government Officer',
       role: role || 'NODAL_OFFICER',
       departmentId: departmentId || 'WATER_SUPPLY',
       departmentName: departmentName || 'Water Supply Department',
       title: 'Officer (' + (departmentName || 'Civic') + ')',
+      email: cleanEmail,
       phone: '9800000000',
-      email: em,
       state: state || 'National Portal',
       district: district || 'Central District',
       preferredLanguage: 'en',
@@ -145,7 +153,7 @@ export function AuthProvider({ children }) {
     setCurrentUser(null);
     setIsAuthenticated(false);
     try {
-      localStorage.removeItem('jansetu_auth_session_v3');
+      localStorage.removeItem('jansetu_auth_session_email_v4');
     } catch (e) {}
   };
 
@@ -154,8 +162,8 @@ export function AuthProvider({ children }) {
       currentUser,
       isAuthenticated,
       loginUser,
-      registerCitizen,
-      registerOfficer,
+      registerCitizenWithEmail,
+      registerOfficerWithEmail,
       switchRole,
       logout,
       isAuthModalOpen,
@@ -174,8 +182,8 @@ export const useAuth = () => {
       currentUser: null,
       isAuthenticated: false,
       loginUser: () => {},
-      registerCitizen: () => {},
-      registerOfficer: () => {},
+      registerCitizenWithEmail: () => {},
+      registerOfficerWithEmail: () => {},
       switchRole: () => {},
       logout: () => {},
       isAuthModalOpen: false,

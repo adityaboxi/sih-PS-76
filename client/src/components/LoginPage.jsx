@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, User, Building2, Phone, Mail, Lock, ArrowRight, CheckCircle2, Globe, Sparkles, KeyRound, ArrowLeft, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Shield, User, Building2, Mail, Lock, ArrowRight, CheckCircle2, Globe, KeyRound, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { LANGUAGES } from '../locales/translations';
 import { PAN_INDIA_GEOGRAPHY } from '../locales/panIndiaGeo';
@@ -7,21 +7,19 @@ import { VALID_DEPARTMENTS } from '../services/mockAiEngine';
 import { notificationService } from '../services/notificationService';
 
 export default function LoginPage({ currentLang, onLanguageChange, t }) {
-  const { loginUser, registerCitizen, registerOfficer, DEMO_ROLES } = useAuth();
-  const [authTab, setAuthTab] = useState('citizen');
+  const { loginUser, registerCitizenWithEmail, registerOfficerWithEmail, DEMO_ROLES } = useAuth();
+  const [authTab, setAuthTab] = useState('citizen'); // 'citizen' or 'officer'
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
 
-  // Citizen Form State
+  // Citizen Form State (Email-Based)
   const [citizenName, setCitizenName] = useState('');
-  const [citizenPhone, setCitizenPhone] = useState('');
+  const [citizenEmail, setCitizenEmail] = useState('');
+  const [citizenPassword, setCitizenPassword] = useState('');
   const [citizenState, setCitizenState] = useState('West Bengal');
   const availableDistricts = PAN_INDIA_GEOGRAPHY[citizenState]?.districts || ['Kolkata', 'Howrah'];
   const [citizenDistrict, setCitizenDistrict] = useState(availableDistricts[0]);
   const [citizenWard, setCitizenWard] = useState('Ward 8 (Jadavpur)');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [countdown, setCountdown] = useState(0);
 
   // Officer Form State
   const [officerName, setOfficerName] = useState('');
@@ -37,41 +35,28 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
   const [newPassword, setNewPassword] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
 
-  useEffect(() => {
-    let timer;
-    if (countdown > 0) {
-      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [countdown]);
-
   const handleCitizenSubmit = (e) => {
     e.preventDefault();
-    if (!otpSent) {
-      if (citizenPhone.length >= 10) {
-        setOtpSent(true);
-        setCountdown(60);
-      }
-      return;
-    }
+    if (!citizenEmail) return;
 
     if (isSignUp) {
-      registerCitizen({
+      registerCitizenWithEmail({
         name: citizenName || 'Citizen User',
-        phone: citizenPhone,
+        email: citizenEmail,
+        password: citizenPassword,
         state: citizenState,
         district: citizenDistrict,
         ward: citizenWard,
         preferredLanguage: currentLang
       });
     } else {
-      const matched = DEMO_ROLES.find(r => r.phone === citizenPhone && r.role === 'CITIZEN') || {
-        id: 'citizen_' + citizenPhone,
-        name: citizenName || 'Citizen User',
+      const matched = DEMO_ROLES.find(r => r.email === citizenEmail && r.role === 'CITIZEN') || {
+        id: 'citizen_' + citizenEmail.replace(/[^a-zA-Z0-9]/g, '_'),
+        name: citizenName || citizenEmail.split('@')[0],
         role: 'CITIZEN',
         title: t.citizen || 'Citizen',
-        phone: citizenPhone,
-        email: citizenPhone + '@citizen.nic.in',
+        email: citizenEmail,
+        phone: '9876543210',
         state: citizenState,
         district: citizenDistrict,
         ward: citizenWard,
@@ -84,10 +69,11 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
 
   const handleOfficerSubmit = (e) => {
     e.preventDefault();
+    if (!officerEmail) return;
     const deptInfo = VALID_DEPARTMENTS[officerDeptId] || VALID_DEPARTMENTS.WATER_SUPPLY;
-    registerOfficer({
+    registerOfficerWithEmail({
       name: officerName || (officerRole === 'ADMIN_COLLECTOR' ? 'District Magistrate, IAS' : 'Nodal Officer'),
-      email: officerEmail || 'officer@gov.in',
+      email: officerEmail,
       departmentId: officerDeptId,
       departmentName: deptInfo.name,
       state: citizenState,
@@ -118,7 +104,7 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-blue-600 selection:text-white">
-      {/* Top Simple Utility Bar */}
+      {/* Top Utility Bar */}
       <header className="max-w-6xl w-full mx-auto px-4 py-6 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black shadow-lg shadow-blue-600/30">
@@ -126,7 +112,9 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
           </div>
           <div>
             <span className="font-extrabold text-lg tracking-tight text-white">{t.portal_title || 'JanSetu AI'}</span>
-            <span className="text-[10px] font-bold ml-2 px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300">{t.national_portal || 'National Portal'}</span>
+            <span className="text-[10px] font-bold ml-2 px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300">
+              {t.national_portal || 'National Portal'}
+            </span>
           </div>
         </div>
 
@@ -165,8 +153,8 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
                 <div className="h-12 w-12 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center mx-auto mb-3 border border-blue-500/30">
                   <KeyRound className="w-6 h-6" />
                 </div>
-                <h2 className="text-xl font-black text-white">Reset Official Password</h2>
-                <p className="text-xs text-slate-400 mt-1">We will send a 6-digit security OTP to your registered government email.</p>
+                <h2 className="text-xl font-black text-white">Reset Account Password</h2>
+                <p className="text-xs text-slate-400 mt-1">We will send a 6-digit verification code to your registered email address.</p>
               </div>
 
               {resetSuccess ? (
@@ -178,13 +166,13 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
               ) : !resetOtpSent ? (
                 <form onSubmit={handleSendResetOtp} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-1">{t.official_email || 'Official Government Email'}:</label>
+                    <label className="block text-xs font-bold text-slate-400 mb-1">Email Address:</label>
                     <input
                       type="email"
                       required
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
-                      placeholder="officer.name@nic.in"
+                      placeholder="name@example.com"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-medium text-white focus:outline-none focus:border-blue-500"
                     />
                   </div>
@@ -239,7 +227,7 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
               {/* Role Tab Switcher */}
               <div className="flex rounded-2xl bg-slate-950 p-1.5 mb-6 border border-slate-800">
                 <button
-                  onClick={() => { setAuthTab('citizen'); setOtpSent(false); }}
+                  onClick={() => { setAuthTab('citizen'); }}
                   className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 cursor-pointer ${
                     authTab === 'citizen'
                       ? 'bg-blue-600 text-white shadow-sm'
@@ -251,7 +239,7 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
                 </button>
 
                 <button
-                  onClick={() => { setAuthTab('officer'); setOtpSent(false); }}
+                  onClick={() => { setAuthTab('officer'); }}
                   className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 cursor-pointer ${
                     authTab === 'officer'
                       ? 'bg-blue-600 text-white shadow-sm'
@@ -263,13 +251,16 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
                 </button>
               </div>
 
-              {/* CITIZEN LOGIN / SIGNUP FLOW */}
+              {/* CITIZEN EMAIL LOGIN / SIGNUP FLOW */}
               {authTab === 'citizen' && (
                 <div>
                   <div className="text-center mb-6">
                     <h2 className="text-xl font-black text-white">
-                      {isSignUp ? (t.create_account || 'Create Citizen Account') : (t.citizen_sign_in || 'Citizen Mobile OTP Sign In')}
+                      {isSignUp ? (t.create_account || 'Create Citizen Account') : 'Citizen Email Sign In'}
                     </h2>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {isSignUp ? 'Sign up with your email to report civic grievances and receive tracking updates.' : 'Enter your registered email and password to access your dashboard.'}
+                    </p>
                   </div>
 
                   <form onSubmit={handleCitizenSubmit} className="space-y-4">
@@ -288,17 +279,43 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
                     )}
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-1">{t.mobile_number || 'Mobile Number'}:</label>
+                      <label className="block text-xs font-bold text-slate-400 mb-1">Email Address:</label>
                       <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-500 font-bold">+91</span>
+                        <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                         <input
-                          type="tel"
+                          type="email"
                           required
-                          maxLength={10}
-                          value={citizenPhone}
-                          onChange={(e) => setCitizenPhone(e.target.value.replace(/\D/g, ''))}
-                          placeholder="9876543210"
-                          className="w-full pl-12 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-medium text-white focus:outline-none focus:border-blue-500"
+                          value={citizenEmail}
+                          onChange={(e) => setCitizenEmail(e.target.value)}
+                          placeholder="aditi.roy@gmail.com"
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-medium text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-400">{t.security_password || 'Password'}:</label>
+                        {!isSignUp && (
+                          <button
+                            type="button"
+                            onClick={() => setIsForgotPassword(true)}
+                            className="text-[11px] text-blue-400 hover:underline font-bold cursor-pointer"
+                          >
+                            {t.forgot_password || 'Forgot Password?'}
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          value={citizenPassword}
+                          onChange={(e) => setCitizenPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-medium text-white focus:outline-none focus:border-blue-500"
                         />
                       </div>
                     </div>
@@ -351,48 +368,18 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
                       </>
                     )}
 
-                    {otpSent && (
-                      <div className="p-3.5 rounded-2xl bg-blue-950/40 border border-blue-500/30 space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-blue-300 font-bold">Verification SMS OTP:</span>
-                          <span className="text-slate-400 text-[10px]">Demo OTP: <strong>1234</strong></span>
-                        </div>
-                        <input
-                          type="text"
-                          required
-                          maxLength={6}
-                          value={otp}
-                          onChange={(e) => setOtp(e.target.value)}
-                          placeholder="Enter OTP (e.g. 1234)"
-                          className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-blue-400 text-sm font-mono tracking-widest text-center text-white focus:outline-none"
-                        />
-                        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-                          <span>{countdown > 0 ? `Resend code in ${countdown}s` : 'Did not receive code?'}</span>
-                          {countdown === 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setCountdown(60)}
-                              className="text-blue-400 hover:underline font-bold cursor-pointer"
-                            >
-                              Resend SMS OTP
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
                     <button
                       type="submit"
                       className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-white text-xs font-extrabold transition shadow-lg shadow-blue-600/30 flex items-center justify-center space-x-2 cursor-pointer"
                     >
-                      <span>{otpSent ? (t.verify_continue || 'Verify & Continue to Dashboard') : (t.send_otp || 'Send Verification OTP')}</span>
+                      <span>{isSignUp ? (t.create_account || 'Create Citizen Account') : 'Sign In to Dashboard'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
 
                     <div className="text-center pt-2">
                       <button
                         type="button"
-                        onClick={() => { setIsSignUp(!isSignUp); setOtpSent(false); }}
+                        onClick={() => { setIsSignUp(!isSignUp); }}
                         className="text-xs text-blue-400 hover:underline font-bold cursor-pointer"
                       >
                         {isSignUp ? (t.already_have_account || 'Already have an account? Sign In') : (t.register_new_citizen || "Don't have an account? Register as New Citizen")}
@@ -407,6 +394,7 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
                 <div>
                   <div className="text-center mb-6">
                     <h2 className="text-xl font-black text-white">{t.govt_official || 'Government Official'} Sign In</h2>
+                    <p className="text-xs text-slate-400 mt-1">Single Sign-On for State Nodal Officers & District Magistrates.</p>
                   </div>
 
                   <form onSubmit={handleOfficerSubmit} className="space-y-4">
@@ -503,7 +491,7 @@ export default function LoginPage({ currentLang, onLanguageChange, t }) {
                         {r.name}
                       </div>
                       <div className="text-[10px] text-slate-500 truncate">
-                        {r.role.replace('_', ' ')} • {r.district || r.state}
+                        {r.email}
                       </div>
                     </button>
                   ))}

@@ -13,7 +13,6 @@ class NotificationService {
         return JSON.parse(saved);
       } catch (e) {}
     }
-    // Seed initial notifications for demo
     return [
       {
         id: 'notif-1',
@@ -25,18 +24,6 @@ class NotificationService {
         ticketNumber: 'GR-2026-WB-1001',
         status: 'DELIVERED',
         timestamp: new Date(Date.now() - 3600000).toISOString(),
-        read: false
-      },
-      {
-        id: 'notif-2',
-        type: 'SMS',
-        recipient: 'aditi.roy@citizen.nic.in',
-        phone: '9876543210',
-        subject: 'SMS Alert: Field Lineman Dispatched',
-        body: 'JanSetu Alert: Er. Soumen Banerjee has mobilized emergency field repair crew for your ticket GR-2026-WB-1001.',
-        ticketNumber: 'GR-2026-WB-1001',
-        status: 'DELIVERED',
-        timestamp: new Date(Date.now() - 3000000).toISOString(),
         read: false
       }
     ];
@@ -73,15 +60,32 @@ class NotificationService {
     this.save();
   }
 
-  // Automated Email & SMS Dispatch on Grievance Ingestion
+  dispatchWelcomeEmail(email, name) {
+    const welcomeNotif = {
+      id: 'notif-welcome-' + Date.now(),
+      type: 'EMAIL',
+      recipient: email,
+      phone: 'N/A',
+      subject: 'Welcome to JanSetu National Grievance Portal',
+      body: 'Namaste ' + (name || 'Citizen') + ', your national citizen account has been successfully created with ' + email + '. You can now report civic grievances and receive live tracking notifications directly in your inbox.',
+      ticketNumber: 'ACCOUNT_CREATED',
+      status: 'DELIVERED',
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+
+    this.notifications.unshift(welcomeNotif);
+    this.save();
+  }
+
   dispatchGrievanceCreated(grievance) {
     const emailNotif = {
-      id: `notif-email-${Date.now()}`,
+      id: 'notif-email-' + Date.now(),
       type: 'EMAIL',
-      recipient: `${grievance.phone}@citizen.nic.in`,
+      recipient: grievance.email || (grievance.phone + '@citizen.nic.in'),
       phone: grievance.phone,
-      subject: `[JanSetu Govt Portal] Grievance Registered: ${grievance.ticket_number}`,
-      body: `Namaste ${grievance.citizen_name}, your grievance has been classified into ${grievance.department_name} under ${grievance.priority_level} priority with a statutory resolution SLA of ${grievance.sla_hours} Hours. Tracking ID: ${grievance.ticket_number}.`,
+      subject: '[JanSetu Govt Portal] Grievance Registered: ' + grievance.ticket_number,
+      body: 'Namaste ' + grievance.citizen_name + ', your grievance has been classified into ' + grievance.department_name + ' under ' + grievance.priority_level + ' priority with a statutory resolution SLA of ' + grievance.sla_hours + ' Hours. Tracking ID: ' + grievance.ticket_number + '.',
       ticketNumber: grievance.ticket_number,
       status: 'DELIVERED',
       timestamp: new Date().toISOString(),
@@ -89,12 +93,12 @@ class NotificationService {
     };
 
     const smsNotif = {
-      id: `notif-sms-${Date.now()}`,
+      id: 'notif-sms-' + Date.now(),
       type: 'SMS',
-      recipient: `${grievance.phone}@citizen.nic.in`,
+      recipient: grievance.email || (grievance.phone + '@citizen.nic.in'),
       phone: grievance.phone,
-      subject: `Govt SMS Alert: Ticket ${grievance.ticket_number}`,
-      body: `JanSetu Alert: Complaint ${grievance.ticket_number} received. SLA: ${grievance.sla_hours}H. Track at https://jansetu.gov.in/track/${grievance.ticket_number}`,
+      subject: 'Govt SMS Alert: Ticket ' + grievance.ticket_number,
+      body: 'JanSetu Alert: Complaint ' + grievance.ticket_number + ' received. SLA: ' + grievance.sla_hours + 'H. Track at https://jansetu.gov.in/track/' + grievance.ticket_number,
       ticketNumber: grievance.ticket_number,
       status: 'DELIVERED',
       timestamp: new Date().toISOString(),
@@ -105,15 +109,14 @@ class NotificationService {
     this.save();
   }
 
-  // Automated Status Update Dispatch
   dispatchStatusUpdated(grievance, newStatus, remarks) {
     const updateNotif = {
-      id: `notif-status-${Date.now()}`,
+      id: 'notif-status-' + Date.now(),
       type: 'EMAIL',
-      recipient: `${grievance.phone}@citizen.nic.in`,
+      recipient: grievance.email || (grievance.phone + '@citizen.nic.in'),
       phone: grievance.phone,
-      subject: `[JanSetu Status Update] Ticket ${grievance.ticket_number} is now ${newStatus}`,
-      body: `Dear ${grievance.citizen_name}, your complaint ${grievance.ticket_number} status has changed to ${newStatus}. Officer Remarks: ${remarks || 'Field team is addressing the issue.'}`,
+      subject: '[JanSetu Status Update] Ticket ' + grievance.ticket_number + ' is now ' + newStatus,
+      body: 'Dear ' + grievance.citizen_name + ', your complaint ' + grievance.ticket_number + ' status has changed to ' + newStatus + '. Officer Remarks: ' + (remarks || 'Field team is addressing the issue.'),
       ticketNumber: grievance.ticket_number,
       status: 'DELIVERED',
       timestamp: new Date().toISOString(),
@@ -124,15 +127,14 @@ class NotificationService {
     this.save();
   }
 
-  // Password Reset OTP Dispatch
   dispatchPasswordResetOtp(email, otp) {
     const resetNotif = {
-      id: `notif-reset-${Date.now()}`,
+      id: 'notif-reset-' + Date.now(),
       type: 'EMAIL',
       recipient: email,
       phone: 'N/A',
-      subject: `[JanSetu Security] Password Reset OTP for ${email}`,
-      body: `Your official password reset verification OTP is: ${otp}. This OTP will expire in 10 minutes. Do not share with anyone.`,
+      subject: '[JanSetu Security] Password Reset OTP for ' + email,
+      body: 'Your official password reset verification OTP is: ' + otp + '. This OTP will expire in 10 minutes. Do not share with anyone.',
       ticketNumber: 'SECURITY_AUTH',
       status: 'DELIVERED',
       timestamp: new Date().toISOString(),

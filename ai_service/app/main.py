@@ -2,7 +2,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
+import logging
 
+from app.core.config import settings
 from app.schemas import (
     GrievanceAnalysisRequest, GrievanceAnalysisResponse,
     DuplicateCheckRequest, ChatRequest, ChatResponse, XAIReasoning
@@ -14,102 +16,115 @@ from app.pipelines.spam_filter import SpamGuard
 from app.pipelines.xai_engine import XAIEngine
 from app.pipelines.rag_assistant import MultilingualRAGAssistant
 
+logging.basicConfig(level=settings.LOG_LEVEL)
+logger = logging.getLogger('jansetu-ai')
+
 app = FastAPI(
-    title="SIH PS 76 - AI Grievance Prioritization & Routing Engine",
-    description="Multilingual AI Microservice for Department Routing, Urgency Scoring, Zero-Discard Spam Filter, and Conversational RAG",
-    version="1.0.0"
+    title='JanSetu AI - Grievance Prioritization & Routing Engine',
+    description='Production Multilingual AI Microservice for SIH PS 76',
+    version='1.0.0',
+    docs_url='/docs',
+    redoc_url='/redoc'
 )
 
+# CORS configuration from .env
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=['*'] if '*' in settings.CORS_ORIGINS else settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
 classifier = DepartmentClassifier()
 rag_assistant = MultilingualRAGAssistant()
 
-@app.get("/health")
+@app.get('/health')
 def health_check():
     return {
-        "status": "healthy",
-        "service": "AI Grievance Prioritization & Routing Engine",
-        "supported_languages": ["bn", "hi", "en", "ta", "te", "mr", "gu", "kn", "ml", "pa", "or", "as"],
-        "version": "1.0.0"
+        'status': 'healthy',
+        'service': 'JanSetu AI Microservice (SIH PS 76)',
+        'environment': settings.ENVIRONMENT,
+        'default_language': settings.DEFAULT_LANGUAGE,
+        'version': '1.0.0'
     }
 
-@app.post("/api/v1/analyze-grievance", response_model=GrievanceAnalysisResponse)
+@app.post('/api/v1/analyze-grievance', response_model=GrievanceAnalysisResponse)
 def analyze_grievance(req: GrievanceAnalysisRequest):
-    # 1. Language Detection & Normalization
-    detected_lang, lang_name = LanguageEngine.detect_language(req.text)
-    user_lang = req.user_preferred_language or detected_lang
-    normalized_en = LanguageEngine.normalize_to_english_concepts(req.text, detected_lang)
+    try:
+        detected_lang, lang_name = LanguageEngine.detect_language(req.text)
+        user_lang = req.user_preferred_language or detected_lang
+        normalized_en = LanguageEngine.normalize_to_english_concepts(req.text, detected_lang)
 
-    # 2. Zero-Discard False Grievance & Spam Evaluation
-    spam_result = SpamGuard.evaluate(req.text)
+        spam_result = SpamGuard.evaluate(req.text)
+        triage_result = classifier.classify_and_score(req.text, normalized_en, user_lang)
 
-    # 3. Department Classification & Urgency Scoring
-    triage_result = classifier.classify_and_score(req.text, normalized_en, user_lang)
+        xai_data = XAIEngine.generate_reasoning(
+            department_name=triage_result['department_name'],
+            priority_level=triage_result['priority_level'],
+            priority_score=triage_result['priority_score'],
+            triggers=triage_result['detected_triggers'],
+            detected_lang=user_lang,
+            sla_hours=triage_result['sla_hours']
+        )
 
-    # 4. Explainable AI (XAI) Transparent Reasoning
-    xai_data = XAIEngine.generate_reasoning(
-        department_name=triage_result["department_name"],
-        priority_level=triage_result["priority_level"],
-        priority_score=triage_result["priority_score"],
-        triggers=triage_result["detected_triggers"],
-        detected_lang=user_lang,
-        sla_hours=triage_result["sla_hours"]
-    )
+        return GrievanceAnalysisResponse(
+            detected_language=detected_lang,
+            detected_language_name=lang_name,
+            normalized_english_text=normalized_en,
+            department_id=triage_result['department_id'],
+            department_name=triage_result['department_name'],
+            sub_category=triage_result['sub_category'],
+            priority_level=triage_result['priority_level'],
+            priority_score=triage_result['priority_score'],
+            sla_hours=triage_result['sla_hours'],
+            is_duplicate=False,
+            master_ticket_id=None,
+            duplicate_similarity_score=0.0,
+            spam_score=spam_result['spam_score'],
+            verification_status=spam_result['verification_status'],
+            reasoning=XAIReasoning(**xai_data)
+        )
+    except Exception as e:
+        logger.error(f'Error analyzing grievance: {str(e)}')
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return GrievanceAnalysisResponse(
-        detected_language=detected_lang,
-        detected_language_name=lang_name,
-        normalized_english_text=normalized_en,
-        department_id=triage_result["department_id"],
-        department_name=triage_result["department_name"],
-        sub_category=triage_result["sub_category"],
-        priority_level=triage_result["priority_level"],
-        priority_score=triage_result["priority_score"],
-        sla_hours=triage_result["sla_hours"],
-        is_duplicate=False,
-        master_ticket_id=None,
-        duplicate_similarity_score=0.0,
-        spam_score=spam_result["spam_score"],
-        verification_status=spam_result["verification_status"],
-        reasoning=XAIReasoning(**xai_data)
-    )
-
-@app.post("/api/v1/detect-duplicate")
+@app.post('/api/v1/detect-duplicate')
 def detect_duplicate(req: DuplicateCheckRequest):
-    is_dup, master_id, score = DuplicateEngine.find_duplicate(
-        new_text=req.text,
-        department_id=req.department_id or "",
-        existing_grievances=req.existing_grievances or []
-    )
-    return {
-        "is_duplicate": is_dup,
-        "master_ticket_id": master_id,
-        "similarity_score": score,
-        "cluster_policy": "Geospatial & Semantic Cosine Distance Matching"
-    }
+    try:
+        is_dup, master_id, score = DuplicateEngine.find_duplicate(
+            new_text=req.text,
+            department_id=req.department_id or '',
+            existing_grievances=req.existing_grievances or [],
+            threshold=settings.DUPLICATE_THRESHOLD
+        )
+        return {
+            'is_duplicate': is_dup,
+            'master_ticket_id': master_id,
+            'similarity_score': score,
+            'cluster_policy': 'Geospatial & Semantic Cosine Distance Matching'
+        }
+    except Exception as e:
+        logger.error(f'Error detecting duplicate: {str(e)}')
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/v1/chat", response_model=ChatResponse)
+@app.post('/api/v1/chat', response_model=ChatResponse)
 def conversational_chat(req: ChatRequest):
-    # Detect language if not provided
-    lang = req.language_code
-    if not lang or lang == "auto":
-        lang, _ = LanguageEngine.detect_language(req.message)
+    try:
+        lang = req.language_code
+        if not lang or lang == 'auto':
+            lang, _ = LanguageEngine.detect_language(req.message)
 
-    res = rag_assistant.answer_query(req.message, lang)
-    return ChatResponse(
-        reply=res["reply"],
-        detected_language=res["detected_language"],
-        cited_sources=res["cited_sources"],
-        suggested_actions=res["suggested_actions"]
-    )
+        res = rag_assistant.answer_query(req.message, lang)
+        return ChatResponse(
+            reply=res['reply'],
+            detected_language=res['detected_language'],
+            cited_sources=res['cited_sources'],
+            suggested_actions=res['suggested_actions']
+        )
+    except Exception as e:
+        logger.error(f'Error in RAG chat: {str(e)}')
+        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+if __name__ == '__main__':
+    uvicorn.run(app, host=settings.HOST, port=settings.PORT)

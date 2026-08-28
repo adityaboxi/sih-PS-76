@@ -9,19 +9,27 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const HOST = process.env.HOST || '0.0.0.0';
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
+
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: CLIENT_ORIGIN === '*' ? '*' : CLIENT_ORIGIN.split(','),
     methods: ['GET', 'POST', 'PATCH']
   }
 });
 
-const PORT = process.env.PORT || 3000;
+app.use(cors({
+  origin: CLIENT_ORIGIN === '*' ? '*' : CLIENT_ORIGIN.split(','),
+  credentials: true
+}));
 
-app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Attach socket.io to request object for realtime broadcasts
+// Attach Socket.io to request lifecycle
 app.use((req, res, next) => {
   req.io = io;
   next();
@@ -32,9 +40,18 @@ app.use('/api', apiRoutes);
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
-    service: 'SIH PS 76 Node.js CRUD & Socket.io Backend',
-    version: '1.0.0',
+    service: 'JanSetu CRUD & Socket.io Server (SIH PS 76)',
+    node_env: process.env.NODE_ENV || 'production',
+    port: PORT,
     timestamp: new Date().toISOString()
+  });
+});
+
+app.use((err, req, res, next) => {
+  console.error('[Server Error]:', err.stack);
+  res.status(500).json({
+    success: false,
+    error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message
   });
 });
 
@@ -45,7 +62,8 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log('🚀 Node.js CRUD & Socket.io Server running on port ' + PORT);
-  console.log('🔗 API Base: http://localhost:' + PORT + '/api');
+server.listen(PORT, HOST, () => {
+  console.log(`🚀 Production Server running at http://${HOST}:${PORT}`);
+  console.log(`🔗 API Base: http://${HOST}:${PORT}/api`);
+  console.log(`📡 AI Service URL: ${process.env.AI_SERVICE_URL || 'http://localhost:5000'}`);
 });

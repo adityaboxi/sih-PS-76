@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+// Dynamically uses VITE_SOCKET_URL from .env, or current domain origin in production
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
 let socket = null;
 

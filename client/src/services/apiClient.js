@@ -1,10 +1,11 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+// Dynamically uses VITE_API_BASE_URL from .env, or defaults to relative /api when deployed behind reverse proxy
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin + '/api' : 'http://localhost:3000/api');
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'

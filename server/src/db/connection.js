@@ -10,14 +10,14 @@ export const connectDB = async () => {
   
   try {
     const conn = await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 2000,
-      socketTimeoutMS: 5000
+      serverSelectionTimeoutMS: 3000,
+      socketTimeoutMS: 10000
     });
     isConnected = true;
-    console.log(`🍃 Connected to MongoDB Successfully: ${conn.connection.host}`);
+    console.log();
   } catch (error) {
     isConnected = false;
-    console.warn(`⚠️ MongoDB unavailable (${error.message}). JanSetu is running with high-performance persistent in-memory/JSON store fallback.`);
+    console.warn();
   }
 };
 

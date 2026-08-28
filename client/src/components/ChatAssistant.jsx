@@ -17,6 +17,30 @@ export default function ChatAssistant({ currentLang, t, onViewTracking }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // Live Token Streaming Typewriter Simulator
+  const streamBotResponse = (fullText) => {
+    let currentText = '';
+    const words = fullText.split(' ');
+    let wordIdx = 0;
+
+    setMessages(prev => [...prev, { sender: 'bot', text: '' }]);
+
+    const interval = setInterval(() => {
+      if (wordIdx < words.length) {
+        currentText += (wordIdx === 0 ? '' : ' ') + words[wordIdx];
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { sender: 'bot', text: currentText };
+          return updated;
+        });
+        wordIdx++;
+      } else {
+        clearInterval(interval);
+        setIsTyping(false);
+      }
+    }, 40); // 40ms per word streaming
+  };
+
   const handleSendMessage = (textToSend) => {
     const query = (textToSend || inputMessage).trim();
     if (!query) return;
@@ -48,41 +72,40 @@ export default function ChatAssistant({ currentLang, t, onViewTracking }) {
           : 'Thank you for your question. JanSetu AI operates 24x7 to route civic complaints to the right authorities with zero data loss.';
       }
 
-      setMessages(prev => [...prev, { sender: 'bot', text: reply }]);
-      setIsTyping(false);
-    }, 800);
+      streamBotResponse(reply);
+    }, 400);
   };
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
-      {/* Floating Circular Trigger Button */}
+      {/* Floating Button */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="h-14 w-14 rounded-full bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition-all cursor-pointer shadow-indigo-600/30 group"
+          className="h-14 w-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition-all cursor-pointer shadow-blue-600/30 group"
           title="Open Nagrik Sahayak AI Chat"
         >
           <MessageSquare className="w-6 h-6 group-hover:scale-110 transition" />
           <span className="absolute -top-1 -right-1 flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
           </span>
         </button>
       )}
 
-      {/* Floating Chat Window (Apple iOS Messages Inspired) */}
+      {/* Floating Chat Modal */}
       {isOpen && (
-        <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/90 w-80 sm:w-96 flex flex-col h-[520px] overflow-hidden animate-scale-up">
-          {/* Top Chat Header */}
-          <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
+        <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/90 w-80 sm:w-96 flex flex-col h-[520px] overflow-hidden">
+          {/* Header */}
+          <div className="bg-slate-950 text-white p-4 flex items-center justify-between">
             <div className="flex items-center space-x-2.5">
-              <div className="h-9 w-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-inner">
+              <div className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black shadow-inner">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
                 <h4 className="text-xs font-bold text-white flex items-center space-x-1.5">
                   <span>{t.chat_title}</span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300">RAG AI</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">RAG Stream</span>
                 </h4>
                 <p className="text-[10px] text-slate-400 font-medium">{t.chat_subtitle}</p>
               </div>
@@ -97,28 +120,28 @@ export default function ChatAssistant({ currentLang, t, onViewTracking }) {
           </div>
 
           {/* Quick Action Chips */}
-          <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 flex items-center space-x-1.5 overflow-x-auto custom-scrollbar text-[10px] font-bold">
+          <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 flex items-center space-x-1.5 overflow-x-auto text-[10px] font-bold">
             <button
               onClick={() => handleSendMessage(t.chat_chip_track)}
-              className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-indigo-400 text-slate-700 transition"
+              className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-blue-400 text-slate-700 transition cursor-pointer"
             >
               🔍 {t.chat_chip_track}
             </button>
             <button
               onClick={() => handleSendMessage(t.chat_chip_water)}
-              className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-indigo-400 text-slate-700 transition"
+              className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-blue-400 text-slate-700 transition cursor-pointer"
             >
               💧 {t.chat_chip_water}
             </button>
             <button
               onClick={() => handleSendMessage(t.chat_chip_power)}
-              className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-indigo-400 text-slate-700 transition"
+              className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-blue-400 text-slate-700 transition cursor-pointer"
             >
               ⚡ {t.chat_chip_power}
             </button>
           </div>
 
-          {/* Messages Scroll View */}
+          {/* Messages Feed */}
           <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/50">
             {messages.map((m, idx) => (
               <div
@@ -128,7 +151,7 @@ export default function ChatAssistant({ currentLang, t, onViewTracking }) {
                 <div
                   className={`max-w-[82%] p-3 rounded-2xl text-xs leading-relaxed font-medium ${
                     m.sender === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-xs shadow-sm'
+                      ? 'bg-blue-600 text-white rounded-br-xs shadow-xs'
                       : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-xs shadow-xs'
                   }`}
                 >
@@ -136,20 +159,10 @@ export default function ChatAssistant({ currentLang, t, onViewTracking }) {
                 </div>
               </div>
             ))}
-
-            {isTyping && (
-              <div className="flex justify-start">
-                <div className="bg-white text-slate-400 border border-slate-200 px-3 py-2 rounded-2xl text-xs flex items-center space-x-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce"></span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:0.2s]"></span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:0.4s]"></span>
-                </div>
-              </div>
-            )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Chat Input Bar */}
+          {/* Input Bar */}
           <form
             onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
             className="p-3 bg-white border-t border-slate-100 flex items-center space-x-2"
@@ -159,11 +172,11 @@ export default function ChatAssistant({ currentLang, t, onViewTracking }) {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder={t.chat_input_placeholder}
-              className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:bg-white focus:outline-none focus:border-indigo-500"
+              className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:bg-white focus:outline-none focus:border-blue-600"
             />
             <button
               type="submit"
-              className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-xs cursor-pointer"
+              className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition shadow-xs cursor-pointer"
             >
               <Send className="w-4 h-4" />
             </button>
